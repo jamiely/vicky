@@ -1,8 +1,8 @@
 import './style.css';
 import { SoundEngine } from './audio/sound';
-import { BOARD, DISK, PUSHER, RULES, SIM, SLOTS, TRAY, type PocketColor, type SlotKind } from './config';
+import { BOARD, DISK, PUSHER, RULES, SIM, SLOTS, TOWER, TRAY, type PocketColor, type SlotKind } from './config';
 import { Stage } from './render/stage';
-import { VIEW } from './render/settings';
+import { VIEW, ZOOM_RANGE } from './render/settings';
 import { Rng } from './rng';
 import { GameRules, type Side } from './rules/game';
 import { PocketDisk } from './sim/disk';
@@ -11,6 +11,14 @@ import { createDebugMenu, type DebugControls, type DebugNumber, type DebugToggle
 import { Hud } from './ui/hud';
 
 export const CREDIT_BATCH = 5;
+
+/** A released pearl rolls out of its tube toward the tray (along the tube, toward −x) at a gentle speed. */
+const RELEASE_VELOCITY = (() => {
+  const dx = TOWER.releaseExit.x - TOWER.x;
+  const dz = TOWER.releaseExit.z - TOWER.z;
+  const len = Math.hypot(dx, dz);
+  return { x: (dx / len) * 40, y: 0, z: (dz / len) * 40 };
+})();
 
 export interface GameOptions {
   seed: number;
@@ -148,12 +156,12 @@ export class Game {
           this.applySlot(event.index);
           break;
         case 'frontExit':
-          if (event.kind === 'pearl') this.disk.launch();
+          if (event.kind === 'pearl') this.disk.launch(event.at);
           break;
         case 'sideExit':
           if (event.kind === 'pearl') {
             this.rules.notePearlLost();
-            this.disk.sendToLift();
+            this.disk.sendToLift(event.at);
           }
           break;
         case 'impact':
@@ -161,9 +169,11 @@ export class Game {
           break;
       }
     }
-    const { pockets, returned } = this.disk.step(SIM.step);
+    const { pockets, returned, released } = this.disk.step(SIM.step);
     for (const pocket of pockets) this.applyPocket(pocket.color);
     for (let i = 0; i < returned; i++) this.rules.returnPearl();
+    // A released pearl leaves the tube moving along it, so physics continues its motion.
+    for (let i = 0; i < released; i++) this.physics.spawnPearl(TOWER.releaseExit, RELEASE_VELOCITY);
 
     for (const side of ['ball', 'ticket'] as const) {
       const before = parties[side];
@@ -184,7 +194,7 @@ export class Game {
     const effects = this.rules.onSlot(index);
     for (const effect of effects) {
       if (effect.type === 'dropBalls') this.physics.queueDrop('ball', effect.count);
-      else this.physics.queueDrop('pearl');
+      else this.disk.release(this.rules.pearlReserve); // the stack's bottom pearl, in the slot just vacated
     }
     if (kind === 'lucky') {
       const won = effects.length > 0;
@@ -236,6 +246,11 @@ export class Game {
     this.hud.push({ text: 'Machine reset', tone: 'info' });
   }
 
+  /** Multiplies the camera distance by `factor` (< 1 zooms in), kept within the zoom range. */
+  zoom(factor: number): void {
+    VIEW.camera.distance = Math.min(ZOOM_RANGE.max, Math.max(ZOOM_RANGE.min, VIEW.camera.distance * factor));
+  }
+
   setMuted(muted: boolean): void {
     this.sound.setMuted(muted);
     this.hud.setMuted(muted);
@@ -261,14 +276,48 @@ export class Game {
 
     // Press anywhere on the cabinet, the LAUNCH button, or Space; holding auto-fires. No aiming: on the source
     // cabinet players cannot steer shots ("you don't really have much choice").
+    // Zoom: mouse wheel / trackpad pinch (ctrl+wheel) / two-finger pinch on the cabinet / + and − keys.
     const canvas = this.stage.renderer.domElement;
-    listen(canvas, 'pointerdown', () => {
-      if (!VIEW.camera.orbit) this.firing = true;
+    const pointers = new Map<number, { x: number; y: number }>();
+    let pinchSpread = 0;
+    const spread = (): number => {
+      const [a, b] = [...pointers.values()];
+      return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+    };
+    listen(canvas, 'pointerdown', (e) => {
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size >= 2) {
+        this.firing = false; // a second finger means a pinch, not a launch
+        pinchSpread = spread();
+      } else if (!VIEW.camera.orbit) this.firing = true;
+    });
+    listen(canvas, 'pointermove', (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const now = spread();
+      if (pointers.size === 2 && pinchSpread > 0 && now > 0) {
+        this.zoom(pinchSpread / now);
+        pinchSpread = now;
+      }
+    });
+    for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
+      listen(canvas, type, (e) => {
+        pointers.delete(e.pointerId);
+        if (pointers.size < 2) pinchSpread = 0;
+        this.firing = false;
+      });
+      listen(this.hud.launch, type, () => (this.firing = false));
+    }
+    listen(canvas, 'wheel', (e) => {
+      if (VIEW.camera.orbit) return; // orbit controls zoom themselves
+      e.preventDefault();
+      this.zoom(Math.exp(e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
     });
     listen(this.hud.launch, 'pointerdown', () => (this.firing = true));
-    for (const target of [canvas, this.hud.launch]) {
-      for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) listen(target, type, () => (this.firing = false));
-    }
+    listen(window, 'keydown', (e) => {
+      if (e.key === '+' || e.key === '=') this.zoom(1 / 1.15);
+      else if (e.key === '-' || e.key === '_') this.zoom(1.15);
+    });
     listen(window, 'keydown', (e) => {
       if (e.code !== 'Space') return;
       e.preventDefault();
@@ -380,7 +429,8 @@ export function debugControls(game: Game): DebugControls {
       { label: 'Force TICKET', group: 'Slots', run: () => game.applySlot(slot('ticket')) },
       { label: 'Force LUCKY', group: 'Slots', run: () => game.applySlot(slot('lucky')) },
       { label: 'Drop 10 balls', group: 'Tray', run: () => game.physics.queueDrop('ball', 10) },
-      { label: 'Drop pearl', group: 'Tray', run: () => game.physics.queueDrop('pearl') },
+      // Adds a pearl outside the circulating set (for testing pushes); LUCKY releases come from the tower instead.
+      { label: 'Drop extra pearl', group: 'Tray', run: () => game.physics.queueDrop('pearl') },
       { label: 'Ball Party', group: 'Party', run: () => game.startParty('ball') },
       { label: 'Ticket Party', group: 'Party', run: () => game.startParty('ticket') },
       { label: 'Pearl → yellow', group: 'Party', run: () => game.applyPocket('yellow') },

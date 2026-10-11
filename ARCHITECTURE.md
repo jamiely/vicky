@@ -32,10 +32,11 @@ flowchart LR
 | `src/rng.ts` | Seeded PRNG (mulberry32) | — |
 | `src/rules/game.ts` | Credits, shots, tickets, ladders, parties, jackpot, payouts, tower pearl reserve; returns `Effect[]` | import three, Rapier, or audio; read wall-clock time |
 | `src/sim/physics.ts` | Rapier world: peg board, slots, tray, rails, pusher, scraper; ball bodies; exits; impact detection; stall recovery | know payouts |
-| `src/sim/disk.ts` | Pearl path after the tray: chute → disk groove → pocket → tower lift → reserve | know payouts |
+| `src/sim/pearlPath.ts` | Geometry of the pearl's trip outside the tray (gutter, chute, groove, lift, tower stack, release tube), shared by the disk sim and the stage | — |
+| `src/sim/disk.ts` | Pearl phases after the tray: chute → disk groove → pocket → lift → tower stack; release → tray | know payouts |
 | `src/app.ts` | `Game`: fixed-step loop, input, event routing, sound/flash cues, reset, mute; `debugControls()` | contain rules |
 | `src/render/stage.ts` | Renderer, camera rig, bloom, environment map, lights, instanced balls and pearls, LED animation, LCD repaint | mutate game state |
-| `src/render/cabinet.ts` | Static cabinet geometry and materials, pearl lift and reserve positions | — |
+| `src/render/cabinet.ts` | Static cabinet geometry and materials | — |
 | `src/render/textures.ts`, `lcd.ts` | Procedural canvas art (panel, logo, slot windows, signs, disk face, 7-segment display, LCD) | — |
 | `src/render/settings.ts` | Live view tunables (`VIEW`): camera, render, LEDs | — |
 | `src/audio/sound.ts` | `SoundEngine`: synthesis, mix, music sequencer | — |
@@ -55,12 +56,29 @@ Pearls are a fixed set (`TRAY.initialPearls` on the tray plus `RULES.pearlReserv
 
 ```mermaid
 flowchart LR
-  Tray -->|pushed off front| Chute --> Disk[disk groove] -->|settles| Pocket -->|pays| Lift
+  Tray -->|pushed off front| Gutter --> Chute --> Disk[disk groove] -->|settles| Pocket -->|pays| Lift
   Tray -->|falls off a side| Lift[tower lift]
-  Lift --> Reserve[tower reserve] -->|LUCKY slot| Tray
+  Lift --> Stack[tower stack] -->|LUCKY: release tube| Tray
 ```
 
-`disk.test.ts` checks conservation: every launched pearl pockets exactly once, and every pearl returns exactly once.
+**No jumps.** Every hand-off shares an endpoint (`pearlPath.ts`); `pearlPath.test.ts` checks each one and samples every segment for sudden moves:
+
+| Hand-off | Shared point |
+|---|---|
+| tray → gutter | the position physics reports with `frontExit`/`sideExit` |
+| chute → disk | `DISK_ENTRY`, where rolling starts |
+| pocket → lift | the pearl's position in its hole; capture eases into the hole instead of snapping |
+| lift → stack | the slot it will occupy. The stack hangs from the tower cap, so a rising pearl stops under the lowest pearl and never passes through the stack |
+| stack → release | the slot it leaves |
+| release → tray | `TOWER.releaseExit`, where physics spawns the pearl, moving along the tube |
+
+`disk.test.ts` checks conservation: every launched pearl pockets exactly once, every pearl returns exactly once, and every release completes.
+
+**Starting tray.** Pearls get one shuffled depth band and one shuffled width column each, so no two share a row and they reach the edge at different times. They're held fixed while randomly packed white balls settle behind a temporary loading fence.
+
+Two failure modes led to this layout:
+- **Grid packing:** squeezed the pearls into the ball rows, lining them up.
+- **No fence:** a quarter of the pile avalanched off the front before play started.
 
 ## Physics model (units: cm, gravity −981 cm/s²)
 
@@ -100,7 +118,10 @@ The cabinet is modeled on reference frames from the videos in `media/`: layout, 
   - A cached galaxy backdrop sits behind a value wheel showing the live pocket pays (SUPER plus the jackpot during Ball Party).
   - The wheel's hub shows LUCKY BALL with the tower count; curved ladders follow its rim; party banners carry countdowns.
   - Flash overlays mark jackpot, party, and lucky events.
-- **Camera:** an orbit rig (distance, pitch, yaw, target) from `VIEW`. On narrow screens it backs off until the cabinet width fits; free orbit is a debug option.
+- **Camera:** an orbit rig (distance, pitch, yaw, target) from `VIEW`.
+  - On narrow screens the distance is scaled up so the cabinet width fits.
+  - Zoom changes the distance: wheel, ctrl+wheel (trackpad pinch), two-finger touch pinch, or `+`/`-`, clamped to `ZOOM_RANGE`.
+  - Free orbit is a debug option.
 
 ## Sound
 

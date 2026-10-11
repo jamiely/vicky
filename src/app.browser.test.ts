@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { CREDIT_BATCH, debugControls, Game } from './app';
-import { DISK, RULES, SIM, SLOTS, TRAY } from './config';
-import { VIEW } from './render/settings';
+import { DISK, RULES, SIM, SLOTS, TOWER, TRAY } from './config';
+import { VIEW, ZOOM_RANGE } from './render/settings';
 
 const games: Game[] = [];
 const viewDefaults = structuredClone(VIEW);
@@ -93,6 +93,68 @@ describe('Game boot and rendering', () => {
   });
 });
 
+describe('zoom', () => {
+  const wheel = (game: Game, deltaY: number, ctrlKey = false): boolean =>
+    game.stage.renderer.domElement.dispatchEvent(new WheelEvent('wheel', { deltaY, ctrlKey, bubbles: true, cancelable: true }));
+  const touch = (game: Game, type: string, pointerId: number, clientX: number): boolean =>
+    game.stage.renderer.domElement.dispatchEvent(new PointerEvent(type, { pointerId, clientX, clientY: 300, bubbles: true }));
+
+  it('the mouse wheel zooms in and out within limits, and moves the camera', async () => {
+    const { game } = await boot();
+    game.frame(0);
+    const far = game.stage.camera.position.distanceTo(game.stage.orbit.target);
+    expect(wheel(game, -300)).toBe(false); // handled: page does not scroll
+    game.frame(0);
+    expect(VIEW.camera.distance).toBeLessThan(viewDefaults.camera.distance);
+    expect(game.stage.camera.position.distanceTo(game.stage.orbit.target)).toBeLessThan(far);
+    for (let i = 0; i < 50; i++) wheel(game, -300);
+    expect(VIEW.camera.distance).toBe(ZOOM_RANGE.min);
+    for (let i = 0; i < 50; i++) wheel(game, 300);
+    expect(VIEW.camera.distance).toBe(ZOOM_RANGE.max);
+  });
+
+  it('a trackpad pinch (ctrl+wheel) zooms faster than a wheel notch', async () => {
+    const { game } = await boot();
+    wheel(game, -20);
+    const notch = viewDefaults.camera.distance - VIEW.camera.distance;
+    VIEW.camera.distance = viewDefaults.camera.distance;
+    wheel(game, -20, true);
+    expect(viewDefaults.camera.distance - VIEW.camera.distance).toBeGreaterThan(notch * 3);
+  });
+
+  it('+ and − keys zoom in and out', async () => {
+    const { game } = await boot();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '+' }));
+    expect(VIEW.camera.distance).toBeCloseTo(viewDefaults.camera.distance / 1.15);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '-' }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '-' }));
+    expect(VIEW.camera.distance).toBeCloseTo(viewDefaults.camera.distance * 1.15);
+    expect(game.firing).toBe(false);
+  });
+
+  it('a two-finger pinch zooms by the change in finger spread and cancels the launch the first finger started', async () => {
+    const { game } = await boot();
+    touch(game, 'pointerdown', 1, 100);
+    expect(game.firing).toBe(true);
+    touch(game, 'pointerdown', 2, 200);
+    expect(game.firing).toBe(false);
+    touch(game, 'pointermove', 2, 300); // spread 100 → 200: zoom in 2×
+    expect(VIEW.camera.distance).toBeCloseTo(viewDefaults.camera.distance / 2);
+    touch(game, 'pointermove', 9, 50); // unknown pointer: ignored
+    touch(game, 'pointerup', 2, 300);
+    touch(game, 'pointermove', 1, 400); // one finger left: no zoom
+    expect(VIEW.camera.distance).toBeCloseTo(viewDefaults.camera.distance / 2);
+    touch(game, 'pointerup', 1, 400);
+  });
+
+  it('leaves the wheel to orbit controls in orbit mode', async () => {
+    const { game } = await boot();
+    VIEW.camera.orbit = true;
+    wheel(game, -300);
+    expect(VIEW.camera.distance).toBe(viewDefaults.camera.distance);
+  });
+});
+
 describe('time control', () => {
   it('pause freezes simulation; time scale speeds it up; long frames are capped', async () => {
     const { game } = await boot();
@@ -175,9 +237,17 @@ describe('slots, pearls, and parties', () => {
     const flash = vi.spyOn(game.stage, 'flash');
     const pearls = (): number => game.physics.bodies.filter((b) => b.kind === 'pearl').length;
     const before = pearls();
+    const total = before + game.rules.pearlReserve;
     game.applySlot(SLOTS.indexOf('lucky'));
-    steps(game, 0.5);
+    // The bottom tower pearl rides down the release tube (still drawn) and appears on the tray exactly at the exit.
+    steps(game, DISK.releaseSeconds / 2);
+    game.frame(0);
+    expect(game.stage.pearlsDrawn).toBe(total);
+    expect(pearls()).toBe(before);
+    steps(game, DISK.releaseSeconds / 2 + SIM.step);
     expect(pearls()).toBe(before + 1);
+    const spawned = game.physics.bodies.filter((b) => b.kind === 'pearl').at(-1)!.body.translation();
+    expect(Math.hypot(spawned.x - TOWER.releaseExit.x, spawned.y - TOWER.releaseExit.y, spawned.z - TOWER.releaseExit.z)).toBeLessThan(2);
     expect(lucky).toHaveBeenLastCalledWith(true);
     expect(flash).toHaveBeenCalledWith('lucky', 0);
     game.rules.pearlReserve = 0;
@@ -340,7 +410,7 @@ describe('debug menu wiring', () => {
     expect(game.rules.pearlReserve).toBe(RULES.pearlReserveStart - 1);
     const bodies = game.physics.bodies.length;
     run('Drop 10 balls');
-    run('Drop pearl');
+    run('Drop extra pearl');
     steps(game, 2);
     expect(game.physics.bodies.length).toBeGreaterThanOrEqual(bodies + 11 - 2);
     run('Ticket Party');

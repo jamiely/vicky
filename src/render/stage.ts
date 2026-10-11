@@ -4,25 +4,20 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { BALL_RADIUS, DISK, PEARL_RADIUS, PUSHER, TRAY } from '../config';
+import { BALL_RADIUS, DISK, PEARL_RADIUS, PUSHER } from '../config';
 import type { GameRules } from '../rules/game';
-import type { PocketDisk } from '../sim/disk';
+import type { DiskPearl, PocketDisk } from '../sim/disk';
+import { chutePoint, groovePoint, liftPoint, releasePoint, sinkDepth, stackPoint, stackY } from '../sim/pearlPath';
 import type { PhysicsWorld } from '../sim/physics';
 import type { DebugLightInfo, DebugLights } from '../ui/debugMenu';
 import { buildCabinet, JACKPOT_DIGITS, type Cabinet } from './cabinet';
 import { LCD_SIZE, paintLcd, type LcdFlash } from './lcd';
-import { VIEW } from './settings';
+import { DEFAULT_DISTANCE, VIEW } from './settings';
 import { paintSevenSegment } from './textures';
 
 const MAX_BALLS = 600;
 const MAX_PEARLS = 48;
-const CHUTE_START = new THREE.Vector3(TRAY.halfWidth - 2, -6, TRAY.front + 3);
-const DISK_ENTRY = new THREE.Vector3(
-  DISK.center.x + DISK.grooveRadius * Math.cos(DISK.entryAngle),
-  DISK.center.y + 1 + PEARL_RADIUS,
-  DISK.center.z - DISK.grooveRadius * Math.sin(DISK.entryAngle),
-);
-/** Half extents (cm) that must stay visible on narrow screens; the camera backs off to keep the cabinet width. */
+/** Half width (cm) that must stay visible at the default distance; narrow screens scale the camera distance up. */
 const FIT_HALF_WIDTH = 72;
 const LCD_FPS = 20;
 
@@ -196,9 +191,9 @@ export class Stage {
     const c = VIEW.camera;
     this.orbit.enabled = c.orbit;
     if (!c.orbit) {
-      // Narrow (portrait) screens: back the camera off until the cabinet width fits the horizontal field of view.
+      // Narrow (portrait) screens scale the distance so the default view still fits the cabinet width; zoom still works.
       const hHalf = Math.tan(THREE.MathUtils.degToRad(c.fov) / 2) * this.camera.aspect;
-      const distance = Math.max(c.distance, FIT_HALF_WIDTH / hHalf);
+      const distance = c.distance * Math.max(1, FIT_HALF_WIDTH / hHalf / DEFAULT_DISTANCE);
       const pitch = THREE.MathUtils.degToRad(c.pitch);
       const yaw = THREE.MathUtils.degToRad(c.yaw);
       this.camera.position.set(
@@ -234,22 +229,36 @@ export class Stage {
       else if (t.kind === 'pearl' && pearls < MAX_PEARLS) this.pearls.setMatrixAt(pearls++, this.m);
     }
     this.q.identity();
+    // Lifting pearls queue up under the stack: the one closest to arriving takes the next free slot.
+    const lifting = disk.pearls.filter((p) => p.phase === 'lift').sort((a, b) => b.t - a.t);
+    const draw = (dp: DiskPearl): void => {
+      const u = (seconds: number): number => Math.min(1, dp.t / seconds);
+      switch (dp.phase) {
+        case 'chute':
+          chutePoint(dp.from, u(DISK.chuteSeconds), this.p);
+          break;
+        case 'rolling':
+          groovePoint(dp.angle, 0, this.p);
+          break;
+        case 'sunk':
+          groovePoint(dp.angle, sinkDepth(dp.t), this.p);
+          break;
+        case 'lift':
+          liftPoint(dp.from, u(DISK.liftSeconds), stackY(rules.pearlReserve + lifting.indexOf(dp)), this.p);
+          break;
+        case 'release':
+          releasePoint(dp.slot, u(DISK.releaseSeconds), this.p);
+          break;
+      }
+    };
     for (const dp of disk.pearls) {
       if (pearls >= MAX_PEARLS) break;
-      if (dp.phase === 'chute') this.p.lerpVectors(CHUTE_START, DISK_ENTRY, dp.t / DISK.chuteSeconds);
-      else if (dp.phase === 'lift') this.cabinet.liftPoint(dp.t / DISK.liftSeconds, this.p);
-      else {
-        const sink = dp.phase === 'sunk' ? Math.min(dp.t * 10, PEARL_RADIUS * 1.3) : 0;
-        this.p.set(
-          DISK.center.x + DISK.grooveRadius * Math.cos(dp.angle),
-          DISK.center.y + 1 + PEARL_RADIUS - sink,
-          DISK.center.z - DISK.grooveRadius * Math.sin(dp.angle),
-        );
-      }
+      draw(dp);
       this.pearls.setMatrixAt(pearls++, this.m.compose(this.p, this.q, this.one));
     }
     for (let i = 0; i < rules.pearlReserve && pearls < MAX_PEARLS; i++) {
-      this.pearls.setMatrixAt(pearls++, this.m.compose(this.cabinet.reservePoint(i, this.p), this.q, this.one));
+      stackPoint(i, this.p);
+      this.pearls.setMatrixAt(pearls++, this.m.compose(this.p, this.q, this.one));
     }
     this.balls.count = balls;
     this.pearls.count = pearls;

@@ -1,12 +1,14 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { BALL_RADIUS, BOARD, GRAVITY, PEARL_RADIUS, PUSHER, SCRAPER_Z, SIM, SLOTS, TRAY } from '../config';
 import type { Rng } from '../rng';
+import type { Vec3 } from './pearlPath';
 
 export type BodyKind = 'ball' | 'pearl';
 export type SimEvent =
   | { type: 'slot'; index: number }
-  | { type: 'frontExit'; kind: BodyKind }
-  | { type: 'sideExit'; kind: BodyKind }
+  /** A body left the tray; `at` is where it was removed, so the path that follows starts from there. */
+  | { type: 'frontExit'; kind: BodyKind; at: Vec3 }
+  | { type: 'sideExit'; kind: BodyKind; at: Vec3 }
   /** A collision jolt: `intensity` 0..1 from the velocity change beyond gravity; `x` for stereo placement. */
   | { type: 'impact'; kind: 'peg' | 'tray' | 'pearl'; intensity: number; x: number };
 
@@ -72,16 +74,33 @@ export class PhysicsWorld {
       this.pusher,
     );
 
-    this.fillTray();
-    // Settle the initial pile with the pusher parked (time stays 0, so its first stroke starts from here).
+    const pearls = this.fillTray();
+    // Settle the initial pile with the pusher parked (time stays 0, so its first stroke starts from here) behind a
+    // temporary loading fence along the front edge and open corners, like an operator filling the tray; without it
+    // a quarter of the pile avalanched off the front before play started. Pearls are held in place meanwhile so the
+    // settling pile cannot herd them into one row.
+    for (const pearl of pearls) pearl.setBodyType(RAPIER.RigidBodyType.Fixed, true);
+    const fence = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+    const fenceHalf = 12;
+    this.world.createCollider(RAPIER.ColliderDesc.cuboid(TRAY.halfWidth + 1, fenceHalf, 0.5).setTranslation(0, fenceHalf, TRAY.front + 0.5), fence);
+    for (const side of [-1, 1]) {
+      this.world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, fenceHalf, TRAY.openCorner / 2 + 0.5).setTranslation(side * (TRAY.halfWidth + 0.5), fenceHalf, TRAY.front - TRAY.openCorner / 2), fence);
+    }
     for (let i = 0; i < 360; i++) {
       this.world.step();
       this.classify();
     }
+    this.world.removeRigidBody(fence);
+    for (const pearl of pearls) pearl.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
   }
 
   queueDrop(kind: BodyKind, count = 1): void {
     for (let i = 0; i < count; i++) this.dropQueue.push(kind);
+  }
+
+  /** Puts a pearl on the tray at `at` moving with `velocity` (a released tower pearl leaving its tube). */
+  spawnPearl(at: Vec3, velocity: Vec3): void {
+    this.addBody('pearl', at.x, at.y, at.z, false).setLinvel(velocity, true);
   }
 
   /** Launches a shot from a random entry along the top: players cannot steer shots on the source cabinet. */
@@ -133,7 +152,8 @@ export class PhysicsWorld {
           this.unstick(t);
         }
       } else if (p.y < EXIT_Y) {
-        event = p.z > TRAY.front ? { type: 'frontExit', kind: t.kind } : { type: 'sideExit', kind: t.kind };
+        const at = { x: p.x, y: p.y, z: p.z };
+        event = p.z > TRAY.front ? { type: 'frontExit', kind: t.kind, at } : { type: 'sideExit', kind: t.kind, at };
       }
       if (event) {
         events.push(event);
@@ -239,29 +259,50 @@ export class PhysicsWorld {
     }
   }
 
-  /** Pearls sit on the floor first; white balls pack around them back-to-front so the pile starts behind the edge. */
-  private fillTray(): void {
-    const pearls: { x: number; z: number }[] = [];
-    for (let i = 0; i < TRAY.initialPearls; i++) {
-      const x = -18 + i * 12 + this.rng.range(-2, 2);
-      const z = this.rng.range(PUSHER.frontMax + PEARL_RADIUS + 2, 10);
-      this.addBody('pearl', x, PEARL_RADIUS + 0.05, z, false);
-      pearls.push({ x, z });
+  /**
+   * Pearls go down first, one per depth band and one per width column, with bands and columns shuffled independently
+   * (a random rook placement): no two share a row, so they reach the front edge at different times, and the jitter is
+   * small enough that they can never overlap. They are held in place while the pile settles (see the constructor).
+   * White balls are then packed randomly (not on a grid: a grid squeezed every pearl into the same ball rows, lining
+   * them up) in layers behind the edge.
+   */
+  private fillTray(): RAPIER.RigidBody[] {
+    const pearls: RAPIER.RigidBody[] = [];
+    const placed: { x: number; y: number; z: number; r: number }[] = [];
+    const n = TRAY.initialPearls;
+    const zMin = PUSHER.frontMax + PEARL_RADIUS + 0.5;
+    const zMax = TRAY.front - 9; // pearls start ≥ 9 cm behind the edge
+    const xLimit = TRAY.halfWidth - PEARL_RADIUS - 3;
+    const shuffled = (): number[] => {
+      const order = Array.from({ length: n }, (_, i) => i);
+      for (let i = n - 1; i > 0; i--) {
+        const j = Math.floor(this.rng.next() * (i + 1));
+        [order[i], order[j]] = [order[j]!, order[i]!];
+      }
+      return order;
+    };
+    const bands = shuffled();
+    const columns = shuffled();
+    for (let i = 0; i < n; i++) {
+      const z = zMin + ((bands[i]! + this.rng.range(0.25, 0.75)) * (zMax - zMin)) / n;
+      const x = -xLimit + ((columns[i]! + this.rng.range(0.35, 0.65)) * 2 * xLimit) / n;
+      pearls.push(this.addBody('pearl', x, PEARL_RADIUS + 0.05, z, false));
+      placed.push({ x, y: PEARL_RADIUS, z, r: PEARL_RADIUS });
     }
-    const spacing = BALL_RADIUS * 2.1;
-    const cols = Math.floor((2 * TRAY.halfWidth - 2) / spacing);
-    const clear = PEARL_RADIUS + BALL_RADIUS + 0.2;
-    let placed = 0;
-    for (let layer = 0; placed < TRAY.initialBalls; layer++) {
-      for (let z = PUSHER.frontMax + BALL_RADIUS + 1; z < TRAY.front - 2 && placed < TRAY.initialBalls; z += spacing) {
-        for (let c = 0; c < cols && placed < TRAY.initialBalls; c++) {
-          const x = -TRAY.halfWidth + 1 + spacing / 2 + c * spacing + (layer % 2) * (spacing / 2) * 0.5;
-          const y = BALL_RADIUS + 0.1 + layer * spacing;
-          if (layer === 0 && pearls.some((p) => Math.hypot(p.x - x, p.z - z) < clear)) continue;
-          this.addBody('ball', x, y, z, false);
-          placed++;
-        }
+    const r = BALL_RADIUS;
+    let balls = 0;
+    for (let layer = 0; balls < TRAY.initialBalls && layer < 6; layer++) {
+      const y = r + 0.1 + layer * 2.05 * r;
+      for (let tries = 0; tries < 800 && balls < TRAY.initialBalls; tries++) {
+        // Packed back from the edges: balls at the front or the open corners spill while the pile slumps.
+        const x = this.rng.range(-TRAY.halfWidth + r + 1, TRAY.halfWidth - r - 1);
+        const z = this.rng.range(PUSHER.frontMax + r + 0.5, TRAY.front - r - 6);
+        if (placed.some((p) => Math.hypot(p.x - x, p.y - y, p.z - z) < p.r + r + 0.15)) continue;
+        this.addBody('ball', x, y, z, false);
+        placed.push({ x, y, z, r });
+        balls++;
       }
     }
+    return pearls;
   }
 }

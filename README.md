@@ -24,8 +24,9 @@ Opening the repository's root `index.html` directly does not work. It is the Vit
   - **LUCKY** releases a big orange pearl from the clear tower on the right (the LCD hub shows how many are waiting).
   - Each hit knocks the other ladder back.
 - Topping a ladder starts a 31 s **Party Time**. In **Ball Party**, BALL drops double balls, pearls pay 180/300, and yellow pays the progressive **jackpot**.
-- Pearls pushed off the front roll onto the spinning disk and pay by pocket color. Pearls that fall off the sides pay nothing.
-- **Where new pearls come from:** pearls are a fixed set that circulates. After paying (or falling off a side), each pearl rides the lift up the tower and waits there until LUCKY releases it onto the tray.
+- Pearls pushed off the front roll along the gutter, down the chute onto the spinning disk, and pay by pocket color. Pearls that fall off the sides pay nothing.
+- **Where new pearls come from:** pearls are a fixed set that circulates. After paying (or falling off a side), each pearl rides the lift up the tower and hangs in the stack under its cap. LUCKY releases the bottom pearl down the tower and out of the tube onto the tray.
+- **Zoom:** mouse wheel, trackpad pinch, two-finger pinch on touch screens, or the `+` / `-` keys. For free camera orbit, use the debug menu.
 - **SOUND ON/OFF** toggles audio (remembered). Audio starts on your first click or key press.
 
 ## Debug menu

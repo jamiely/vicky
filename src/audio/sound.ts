@@ -44,7 +44,8 @@ export class SoundEngine {
   private rattle!: GainNode;
   private noise!: AudioBuffer;
   private isMuted = false;
-  private voices = 0;
+  /** Scheduled stop times of playing voices (pruned on read). */
+  private voiceEnds: number[] = [];
   private readonly lastImpact: Record<ImpactKind, number> = { peg: -Infinity, tray: -Infinity, pearl: -Infinity, disk: -Infinity };
   private mode: Music = 'idle';
   private step = 0;
@@ -124,7 +125,9 @@ export class SoundEngine {
 
   /** Sounds currently playing (diagnostics and voice-limit tests). */
   get activeVoices(): number {
-    return this.voices;
+    const now = this.ctx?.currentTime ?? Infinity;
+    this.voiceEnds = this.voiceEnds.filter((end) => end > now);
+    return this.voiceEnds.length;
   }
 
   /** Music bed currently selected by `update()`. */
@@ -154,8 +157,9 @@ export class SoundEngine {
     const t = this.now();
     if (t === null) return;
     if (t - this.lastImpact[kind] < IMPACT_SPACING[kind]) return;
-    if (this.voices >= MAX_IMPACT_VOICES && intensity < 0.6) return;
-    if (this.voices >= MAX_IMPACT_VOICES * 1.5) return;
+    const busy = this.activeVoices;
+    if (busy >= MAX_IMPACT_VOICES && intensity < 0.6) return;
+    if (busy >= MAX_IMPACT_VOICES * 1.5) return;
     this.lastImpact[kind] = t;
     const v = Math.max(0.05, Math.min(1, intensity));
     const jitter = 0.9 + Math.random() * 0.2;
@@ -308,9 +312,14 @@ export class SoundEngine {
     src.start();
   }
 
-  private track(node: AudioScheduledSourceNode): void {
-    this.voices++;
-    node.onended = () => this.voices--;
+  /**
+   * Stops `node` at `stopAt`; sound effects (not music-bed notes) count toward the impact voice budget until then.
+   * Counting by schedule rather than `ended` events matters: lost events would leak the budget until impacts were
+   * silenced for good.
+   */
+  private track(node: AudioScheduledSourceNode, stopAt: number, dest: AudioNode = this.sfx): void {
+    node.stop(stopAt);
+    if (dest !== this.music) this.voiceEnds.push(stopAt);
   }
 
   /** Enveloped oscillator note; `wet` also feeds the reverb. */
@@ -326,8 +335,7 @@ export class SoundEngine {
     out.connect(dest);
     if (wet) out.connect(this.reverb);
     osc.start(t);
-    osc.stop(t + dur + 0.02);
-    this.track(osc);
+    this.track(osc, t + dur + 0.02, dest);
   }
 
   /** Filtered noise burst; optional sweep of the filter frequency to `sweepTo`. */
@@ -343,8 +351,7 @@ export class SoundEngine {
     src.connect(filter).connect(env);
     (pan === 0 ? env : env.connect(new StereoPannerNode(ctx, { pan }))).connect(dest);
     src.start(t, Math.random() * 1.5);
-    src.stop(t + dur + 0.02);
-    this.track(src);
+    this.track(src, t + dur + 0.02, dest);
   }
 
   private glide(t: number, from: number, to: number, dur: number, type: OscillatorType, gain: number): void {
@@ -360,8 +367,7 @@ export class SoundEngine {
     osc.connect(filter).connect(env).connect(this.sfx);
     env.connect(this.reverb);
     osc.start(t);
-    osc.stop(t + dur + 0.02);
-    this.track(osc);
+    this.track(osc, t + dur + 0.02);
   }
 
   /** Brass-like stab: detuned saws through an opening low-pass. */
@@ -382,8 +388,7 @@ export class SoundEngine {
       const osc = new OscillatorNode(ctx, { type: 'sawtooth', frequency: freq, detune });
       osc.connect(filter);
       osc.start(t);
-      osc.stop(t + dur + 0.02);
-      this.track(osc);
+      this.track(osc, t + dur + 0.02);
     }
   }
 

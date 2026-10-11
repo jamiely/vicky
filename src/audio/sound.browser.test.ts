@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SoundEngine } from './sound';
 
 /**
@@ -7,6 +7,9 @@ import { SoundEngine } from './sound';
  */
 const RATE = 22050;
 const engines: SoundEngine[] = [];
+// Fake timers everywhere: the music sequencer runs on setInterval, so with real timers it would schedule notes at
+// whatever moment the timer happened to fire during offline rendering. Tests that want music tick it explicitly.
+beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   for (const s of engines.splice(0)) s.close();
   vi.useRealTimers();
@@ -97,8 +100,7 @@ describe('SoundEngine', () => {
     const silent = await render(3.5, () => {});
     const { buffer, engine } = await render(3.5, play);
     expect(peakAdded(buffer, silent.buffer)).toBeGreaterThan(0.01);
-    // `ended` events are queued as tasks and may land just after startRendering resolves: await the condition.
-    await vi.waitFor(() => expect(engine.activeVoices).toBe(0));
+    expect(engine.activeVoices).toBe(0);
   });
 
   it('jackpot fanfare outlasts a pocket payout', async () => {
@@ -122,6 +124,16 @@ describe('SoundEngine', () => {
     const one = engine.activeVoices;
     for (let i = 0; i < 10; i++) engine.impact('peg', 1, 0);
     expect(engine.activeVoices).toBe(one);
+  });
+
+  it('music-bed notes never use up the impact voice budget', () => {
+    const { engine } = offline(2);
+    engine.unlock();
+    engine.update({ ...idle, ballParty: true });
+    vi.advanceTimersByTime(25); // schedule a lookahead window of the busiest bed
+    expect(engine.activeVoices).toBe(0);
+    engine.impact('peg', 0.2, 0);
+    expect(engine.activeVoices).toBeGreaterThan(0);
   });
 
   it('drops quiet impacts once the voice budget is spent', () => {
@@ -173,7 +185,6 @@ describe('SoundEngine', () => {
    * 25 ms interval would. `firstTick` delays the first tick to model a stalled (hidden) tab; `ticks: false` never ticks.
    */
   async function playBed(state: typeof idle, seconds: number, options: { muted?: boolean; firstTick?: number; ticks?: boolean } = {}): Promise<AudioBuffer> {
-    vi.useFakeTimers();
     const { ctx, engine } = offline(seconds);
     engine.setMuted(options.muted ?? false);
     engine.unlock();

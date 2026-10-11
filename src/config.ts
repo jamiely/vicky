@@ -72,7 +72,8 @@ export const BOARD = {
 };
 
 export const DISK = {
-  center: { x: 60, y: 0, z: 18 }, // face at y≈1, clear of the base's chrome top (y ≤ −2.2)
+  // Below the tray (as on the cabinet, the bowl sits lower at the front-right) so the gutter → chute runs downhill.
+  center: { x: 60, y: -16, z: 18 },
   radius: 14,
   grooveRadius: 10,
   holeRadius: 2.9,
@@ -86,6 +87,26 @@ export const DISK = {
   chuteSeconds: 0.9,
   sinkSeconds: 1.2,
   liftSeconds: 3.5,
+  releaseSeconds: 1.1,
+};
+
+/**
+ * Clear pearl tower beside the tray (behind the disk bowl). Pearls ride a lift up its axis and hang in a stack below
+ * the top cap; LUCKY releases the bottom pearl down the axis and through a short tube onto the tray.
+ */
+export const TOWER = {
+  x: DISK.center.x + 2,
+  z: DISK.center.z - 26,
+  baseY: -2,
+  height: 120,
+  radiusBottom: 13,
+  radiusTop: 9,
+  /** Height of the lowest point of the reserve stack's top cap (index-0 pearl touches it). */
+  stackTopY: 112,
+  /** Where released pearls leave the tube above the tray's back-right corner (over the pusher top). */
+  releaseExit: { x: TRAY.halfWidth - 5, y: 14, z: -6 },
+  /** Height at which the release tube branches off the tower axis toward the tray. */
+  releaseTubeY: 14,
 };
 
 export const SIM = {

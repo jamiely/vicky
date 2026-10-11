@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOARD, SIM, SLOTS, TRAY } from '../config';
+import { BOARD, PEARL_RADIUS, SIM, SLOTS, TRAY } from '../config';
 import { Rng } from '../rng';
 import { PhysicsWorld, type SimEvent } from './physics';
 
@@ -72,6 +72,22 @@ describe('tray exits and impacts', () => {
     run(physics, 1);
     expect(count('ball') + count('pearl')).toBeGreaterThanOrEqual(balls + pearls + 5 - 1); // one may already have spilled
     physics.dispose();
+  });
+});
+
+describe('starting tray', () => {
+  it.each([1, 2, 3, 4, 5])('seed %i scatters the starting pearls: staggered depths, spread out, never in a line', async (seed) => {
+    const physics = await PhysicsWorld.create(new Rng(seed));
+    const pearls = physics.bodies.filter((b) => b.kind === 'pearl').map((b) => b.body.translation());
+    physics.dispose();
+    expect(pearls).toHaveLength(TRAY.initialPearls);
+    const zs = pearls.map((p) => p.z).sort((a, b) => a - b);
+    // Each pearl sits at its own depth, so they reach the front edge one at a time.
+    for (let i = 1; i < zs.length; i++) expect(zs[i]! - zs[i - 1]!).toBeGreaterThan(1);
+    expect(zs.at(-1)! - zs[0]!).toBeGreaterThan(6);
+    // None sits anywhere near the edge yet, and none overlap.
+    expect(zs.at(-1)!).toBeLessThan(TRAY.front - 6);
+    for (const [i, a] of pearls.entries()) for (const b of pearls.slice(i + 1)) expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeGreaterThan(2 * PEARL_RADIUS);
   });
 });
 
