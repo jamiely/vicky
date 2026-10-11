@@ -10,7 +10,7 @@
 
 ```mermaid
 flowchart LR
-  Input[pointer / Space / HUD buttons] -->|firing, credit, reset, mute| Game[app.ts Game]
+  Input[pointer / Space / C / HUD buttons] -->|firing, credit, reset, mute| Game[app.ts Game]
   Game -->|tryLaunch / onSlot / onPocket / tick / returnPearl| Rules[rules/game — pure]
   Rules -->|Effect[]: dropBalls, dropPearl| Game
   Game -->|spawnShot / queueDrop| Physics[sim/physics — Rapier]

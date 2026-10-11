@@ -319,6 +319,11 @@ export class Game {
       else if (e.key === '-' || e.key === '_') this.zoom(1.15);
     });
     listen(window, 'keydown', (e) => {
+      if (e.code === 'KeyC') {
+        e.preventDefault();
+        if (!e.repeat) this.addCredits(CREDIT_BATCH);
+        return;
+      }
       if (e.code !== 'Space') return;
       e.preventDefault();
       this.firing = true;

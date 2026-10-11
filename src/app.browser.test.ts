@@ -173,6 +173,19 @@ describe('time control', () => {
 });
 
 describe('launching', () => {
+  it('adds one credit batch per C press, not per held-key repeat', async () => {
+    const { game } = await boot();
+    key('keydown', 'KeyC');
+    for (let i = 0; i < 4; i++) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyC', key: 'c', repeat: true }));
+    }
+    expect(game.rules.credits).toBe(RULES.startCredits + CREDIT_BATCH);
+    expect(game.firing).toBe(false);
+    key('keyup', 'KeyC');
+    key('keydown', 'KeyC');
+    expect(game.rules.credits).toBe(RULES.startCredits + 2 * CREDIT_BATCH);
+  });
+
   it('holding Space fires at the auto-fire rate and releasing stops', async () => {
     const { game } = await boot();
     const launch = vi.spyOn(game.sound, 'launch');
