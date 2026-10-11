@@ -44,9 +44,13 @@ flowchart LR
 - **Peg board:** two acrylic panes 4.8 cm apart confine balls to a near-2D fall. Static cylinder pegs in centered,
   staggered rows plus wall bumpers on every row, so no free lane runs down the sides. Seven slot bins sit at the bottom.
   A ball whose center drops below the bin line is consumed and reported as `slot(i)`.
-  - Board balls use **soft CCD** (3 cm prediction). Hard CCD froze touching balls with repeated zero time-of-impact.
+  - **No CCD.** Peak speed (~3 cm/step at 120 Hz) can't skip the 5.2 cm a ball needs to clear a peg. Hard CCD froze
+    touching bodies (repeated zero time-of-impact); soft CCD's predictive contacts held balls in mid-air.
+  - Contact prediction is cut to 0.2 cm (`normalizedPredictionDistance = 0.002`). Rapier's default scales to 2 cm at
+    `lengthUnit = 100`, enough for two pegs' prediction bands to cradle a ball between them.
   - Board balls collide with statics only (collision groups). Two balls side by side otherwise arch between pegs and jam the board.
-  - A ball that rests for 0.6 s gets a sideways kick.
+  - Stall recovery, like cabinet vibration: a ball at rest for 0.6 s is kicked; after three kicks it drops straight into
+    the bin below where it stalled. `src/sim/physics.test.ts` requires every shot to reach a slot across seeded bursts.
 - **Tray:** static floor. Low side rails stop 7 cm short of the front edge; balls at the open corners fall off the sides. The front edge is open.
 - **Pusher:** kinematic box moving sinusoidally along z. A fixed scraper wall just above the pusher top sweeps riders off on the retract stroke.
   The initial pile settles with the pusher parked, so nothing spills before play.

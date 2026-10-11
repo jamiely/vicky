@@ -14,6 +14,8 @@ export interface Tracked {
   /** True while falling through the peg board; false once on the tray. */
   inBoard: boolean;
   stillFor: number;
+  /** Kicks given to free this board ball from a stall. */
+  kicks: number;
 }
 
 const SLOT_WIDTH = (2 * BOARD.halfWidth) / SLOTS.length;
@@ -49,6 +51,9 @@ export class PhysicsWorld {
     this.world.timestep = SIM.step;
     this.world.lengthUnit = 100; // centimeters
     this.world.numSolverIterations = 6;
+    // Default 0.02 × lengthUnit = 2 cm of contact prediction: a ball between two pegs sat inside both bands and the
+    // solver held it in mid-air. 0.2 cm is ample for these speeds.
+    this.world.integrationParameters.normalizedPredictionDistance = 0.002;
 
     this.buildTray();
     this.buildBoard();
@@ -124,14 +129,25 @@ export class PhysicsWorld {
     return events;
   }
 
-  /** A ball balanced on a peg would stall the board; nudge it after a short rest. */
+  /**
+   * Rapier occasionally cradles a board ball on a peg flank (predicted contacts with no real second support).
+   * Like cabinet vibration, kick it free; if it keeps settling back, drop it straight into the bin below so every
+   * shot still resolves to the slot under where it stalled.
+   */
   private unstick(t: Tracked): void {
     const v = t.body.linvel();
     t.stillFor = v.x * v.x + v.y * v.y < 4 ? t.stillFor + SIM.step : 0;
-    if (t.stillFor > 0.6) {
-      t.body.setLinvel({ x: this.rng.sign() * 30, y: 10, z: 0 }, true);
-      t.stillFor = 0;
+    if (t.stillFor < 0.6) return;
+    t.stillFor = 0;
+    t.kicks++;
+    if (t.kicks < 3) {
+      t.body.setLinvel({ x: this.rng.sign() * 60, y: 20, z: 0 }, true);
+      return;
     }
+    const p = t.body.translation();
+    const slot = Math.min(SLOTS.length - 1, Math.max(0, Math.floor((p.x + BOARD.halfWidth) / SLOT_WIDTH)));
+    t.body.setTranslation({ x: -BOARD.halfWidth + (slot + 0.5) * SLOT_WIDTH, y: BOARD.binTop + BALL_RADIUS + 0.5, z: BOARD.z }, true);
+    t.body.setLinvel({ x: 0, y: -50, z: 0 }, true);
   }
 
   private addBody(kind: BodyKind, x: number, y: number, z: number, inBoard: boolean): RAPIER.RigidBody {
@@ -139,9 +155,9 @@ export class PhysicsWorld {
     const desc = RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(x, y, z)
       .setLinearDamping(inBoard ? 0.05 : 0.4)
-      .setAngularDamping(0.6)
-      // Soft CCD: hard CCD freezes touching CCD bodies (repeated zero time-of-impact). Peak board speed is ~3 cm/step.
-      .setSoftCcdPrediction(inBoard ? 3 : 0);
+      // No CCD for board balls. Peak speed (~3 cm/step) is below the 5.2 cm a ball needs to clear a peg, and both
+      // CCD modes stall the board: hard CCD freezes touching bodies; soft CCD's predictive contacts cradle balls in mid-air.
+      .setAngularDamping(0.6);
     const body = this.world.createRigidBody(desc);
     this.world.createCollider(
       RAPIER.ColliderDesc.ball(pearl ? PEARL_RADIUS : BALL_RADIUS)
@@ -152,7 +168,7 @@ export class PhysicsWorld {
         .setCollisionGroups(inBoard ? BOARD_BALL_GROUPS : 0xffffffff),
       body,
     );
-    this.bodies.push({ body, kind, inBoard, stillFor: 0 });
+    this.bodies.push({ body, kind, inBoard, stillFor: 0, kicks: 0 });
     return body;
   }
 
