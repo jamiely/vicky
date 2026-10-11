@@ -9,6 +9,7 @@ export interface DebugAction { label: string; run(): void; group?: string }
 export interface DebugLightInfo { id: string; name: string; type: 'ambient' | 'hemisphere' | 'directional' | 'point' | 'spot'; enabled: boolean; color: string; intensity: number; x: number; y: number; z: number }
 export interface DebugLights { list(): DebugLightInfo[]; set(id: string, key: 'enabled' | 'color' | 'intensity' | 'x' | 'y' | 'z', value: boolean | string | number): void; add(type: 'point' | 'spot'): void; select(id: string | null): void }
 export interface DebugControls { groups: DebugGroup[]; actions: DebugAction[]; lights?: DebugLights; /** One-line live stats (fps, bodies...), polled ~4x/s. */ stats?(): string; /** Called after any value change so the host can refresh dependent state. */ onChange?(): void }
+export interface DebugMenu { element: HTMLElement; toggle(): void; refresh(): void; /** Stops timers, unbinds keys, removes the DOM. */ dispose(): void }
 
 type ParamValue = number | boolean | string;
 
@@ -32,7 +33,7 @@ function slug(title: string): string {
 }
 
 /** Mounts the panel (hidden unless `open`); backquote (`) toggles visibility; returns a handle. */
-export function createDebugMenu(host: HTMLElement, controls: DebugControls, open: boolean): { element: HTMLElement; toggle(): void; refresh(): void } {
+export function createDebugMenu(host: HTMLElement, controls: DebugControls, open: boolean): DebugMenu {
   const root = el('aside', 'debug-menu');
   root.hidden = !open;
   const stopKeys = (e: KeyboardEvent): void => {
@@ -221,14 +222,13 @@ export function createDebugMenu(host: HTMLElement, controls: DebugControls, open
     enabled.addEventListener('change', () => apply('enabled', enabled.checked));
     color.addEventListener('input', () => apply('color', color.value));
     intensity.addEventListener('input', () => {
-      const v = Number(intensity.value);
-      if (Number.isFinite(v)) apply('intensity', v);
+      // A cleared or mistyped number field reads as '' (Number('') === 0): ignore it rather than zeroing the light.
+      if (intensity.value !== '') apply('intensity', Number(intensity.value));
     });
     for (const axis of LIGHT_AXES) {
       const input = axisInputs[axis];
       input.addEventListener('input', () => {
-        const v = Number(input.value);
-        if (Number.isFinite(v)) apply(axis, v);
+        if (input.value !== '') apply(axis, Number(input.value));
       });
     }
     refreshers.push(() => syncLights());
@@ -298,7 +298,7 @@ export function createDebugMenu(host: HTMLElement, controls: DebugControls, open
     if (!root.hidden) refresh();
   };
   toggleButton.addEventListener('click', toggle);
-  window.addEventListener('keydown', (e) => {
+  const onKey = (e: KeyboardEvent): void => {
     if (e.key !== '`' || e.repeat) return;
     const target = e.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
@@ -306,19 +306,34 @@ export function createDebugMenu(host: HTMLElement, controls: DebugControls, open
     }
     e.preventDefault();
     toggle();
-  });
+  };
+  window.addEventListener('keydown', onKey);
 
-  window.setInterval(() => {
-    if (!root.hidden) refresh();
-  }, 500);
+  const timers = [
+    window.setInterval(() => {
+      if (!root.hidden) refresh();
+    }, 500),
+  ];
   if (controls.stats) {
     const stats = controls.stats;
-    window.setInterval(() => {
-      if (!root.hidden) statsLine.textContent = stats();
-    }, 250);
+    timers.push(
+      window.setInterval(() => {
+        if (!root.hidden) statsLine.textContent = stats();
+      }, 250),
+    );
   }
 
   host.append(root, toggleButton);
   refresh();
-  return { element: root, toggle, refresh };
+  return {
+    element: root,
+    toggle,
+    refresh,
+    dispose: () => {
+      for (const timer of timers) window.clearInterval(timer);
+      window.removeEventListener('keydown', onKey);
+      root.remove();
+      toggleButton.remove();
+    },
+  };
 }

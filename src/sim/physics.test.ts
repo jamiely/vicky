@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { SIM } from '../config';
+import { BOARD, SIM, SLOTS, TRAY } from '../config';
 import { Rng } from '../rng';
-import { PhysicsWorld } from './physics';
+import { PhysicsWorld, type SimEvent } from './physics';
+
+function run(physics: PhysicsWorld, seconds: number): SimEvent[] {
+  const events: SimEvent[] = [];
+  for (let i = 0; i < seconds / SIM.step; i++) events.push(...physics.step());
+  return events;
+}
 
 describe('peg board', () => {
   // Regression guard for board stalls seen during tuning: wall-lane traps, two-ball arches between pegs,
@@ -23,4 +29,70 @@ describe('peg board', () => {
       physics.dispose();
     }
   }, 120_000);
+});
+
+describe('tray exits and impacts', () => {
+  it('classifies a body leaving past the front edge as frontExit and past a side as sideExit, removing it', async () => {
+    const physics = await PhysicsWorld.create(new Rng(2));
+    const pearls = physics.bodies.filter((b) => b.kind === 'pearl');
+    pearls[0]!.body.setTranslation({ x: 0, y: -10, z: TRAY.front + 3 }, true);
+    pearls[1]!.body.setTranslation({ x: TRAY.halfWidth + 5, y: -10, z: 0 }, true);
+    const before = physics.bodies.length;
+    const exits = run(physics, SIM.step).filter((e) => e.type === 'frontExit' || e.type === 'sideExit');
+    expect(exits).toEqual([
+      expect.objectContaining({ kind: 'pearl' }),
+      expect.objectContaining({ kind: 'pearl' }),
+    ]);
+    expect(exits.map((e) => e.type).sort()).toEqual(['frontExit', 'sideExit']);
+    expect(physics.bodies.length).toBe(before - 2);
+    physics.dispose();
+  });
+
+  it('reports impacts as balls hit pegs and land on the tray, with intensity in (0, 1]', async () => {
+    const physics = await PhysicsWorld.create(new Rng(4));
+    physics.spawnShot();
+    physics.queueDrop('pearl');
+    physics.queueDrop('ball', 3);
+    const impacts = run(physics, 2).filter((e): e is Extract<SimEvent, { type: 'impact' }> => e.type === 'impact');
+    const kinds = new Set(impacts.map((e) => e.kind));
+    expect(kinds).toEqual(new Set(['peg', 'tray', 'pearl']));
+    expect(impacts.every((e) => e.intensity > 0 && e.intensity <= 1)).toBe(true);
+    physics.dispose();
+  });
+
+  it('drops queued balls and pearls onto the tray one at a time', async () => {
+    const physics = await PhysicsWorld.create(new Rng(5));
+    const count = (kind: 'ball' | 'pearl'): number => physics.bodies.filter((b) => b.kind === kind && !b.inBoard).length;
+    const balls = count('ball');
+    const pearls = count('pearl');
+    physics.queueDrop('ball', 4);
+    physics.queueDrop('pearl');
+    physics.step();
+    expect(count('ball')).toBe(balls + 1);
+    run(physics, 1);
+    expect(count('ball') + count('pearl')).toBeGreaterThanOrEqual(balls + pearls + 5 - 1); // one may already have spilled
+    physics.dispose();
+  });
+});
+
+describe('stall recovery', () => {
+  it('kicks a ball resting on the board, then drops it into the slot below where it stalled', async () => {
+    const physics = await PhysicsWorld.create(new Rng(6));
+    physics.spawnShot();
+    const shot = physics.bodies.find((b) => b.inBoard)!;
+    // Simulate a wedge: hold the ball still against gravity; recovery must still resolve it to the slot below.
+    shot.body.setGravityScale(0, true);
+    const x = -BOARD.halfWidth + 1.5 * ((2 * BOARD.halfWidth) / SLOTS.length); // middle of slot 1
+    let slot: number | null = null;
+    for (let i = 0; i < 4 / SIM.step && slot === null; i++) {
+      if (shot.kicks < 3) {
+        shot.body.setTranslation({ x, y: 50, z: BOARD.z }, true);
+        shot.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      }
+      for (const e of physics.step()) if (e.type === 'slot') slot = e.index;
+    }
+    expect(shot.kicks).toBe(3);
+    expect(slot).toBe(1);
+    physics.dispose();
+  });
 });

@@ -48,6 +48,8 @@ export class Stage {
   private lcdNext = 0;
   private jackpotShown = -1;
   private flashState: LcdFlash | null = null;
+  /** Pearls drawn last frame across tray, chute, disk, lift, and tower (diagnostics; pearls must never vanish). */
+  pearlsDrawn = 0;
   private readonly lights: RegisteredLight[] = [];
   private readonly lightMarker: THREE.Mesh;
   private selectedLight: string | null = null;
@@ -251,6 +253,7 @@ export class Stage {
     }
     this.balls.count = balls;
     this.pearls.count = pearls;
+    this.pearlsDrawn = pearls;
     this.balls.instanceMatrix.needsUpdate = true;
     this.pearls.instanceMatrix.needsUpdate = true;
   }

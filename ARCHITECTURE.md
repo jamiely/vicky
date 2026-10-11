@@ -1,73 +1,135 @@
 # Architecture
 
-Stack: TypeScript, Vite, three.js (rendering), Rapier (`@dimforge/rapier3d-compat`, rigid-body physics with WASM
-embedded as base64), and Vitest (rules tests). `vite-plugin-singlefile` inlines everything into one HTML file,
-so the production build runs from `file://`.
+- **Rendering:** TypeScript, Vite, three.js with `EffectComposer` and `UnrealBloomPass`.
+- **Physics:** Rapier (`@dimforge/rapier3d-compat`, rigid-body physics with its WASM embedded as base64).
+- **Sound:** Web Audio, all synthesized procedurally.
+- **Tests:** Vitest. A Node project covers rules and simulation; a Chromium browser project covers rendering, sound, and UI. Coverage is V8.
+- **Build:** `vite-plugin-singlefile` inlines everything into one HTML file, so the production build runs from `file://`.
 
 ## Layers
 
 ```mermaid
 flowchart LR
-  Input[ui/input] -->|aim, launch, credit| Main[main loop]
-  Main -->|tryLaunch / onSlot / onPocket / tick| Rules[rules/game — pure]
-  Rules -->|Effect[]: dropBalls, dropPearl| Main
-  Main -->|spawnShot / spawnBalls / spawnPearl| Physics[sim/physics — Rapier]
-  Physics -->|SimEvent[]: slot, frontExit, sideExit| Main
-  Main -->|launchPearl| Disk[sim/disk — pure]
-  Disk -->|PocketEvent| Main
-  Rules -->|snapshot| Render[render/* — three.js]
-  Physics -->|body poses| Render
-  Disk -->|pearl angles, disk angle| Render
-  Rules -->|snapshot, notices| HUD[ui/hud — DOM]
+  Input[pointer / Space / HUD buttons] -->|firing, credit, reset, mute| Game[app.ts Game]
+  Game -->|tryLaunch / onSlot / onPocket / tick / returnPearl| Rules[rules/game — pure]
+  Rules -->|Effect[]: dropBalls, dropPearl| Game
+  Game -->|spawnShot / queueDrop| Physics[sim/physics — Rapier]
+  Physics -->|SimEvent[]: slot, frontExit, sideExit, impact| Game
+  Game -->|launch / sendToLift| Disk[sim/disk — pure]
+  Disk -->|pockets, returned| Game
+  Game -->|cues, update| Sound[audio/sound — Web Audio]
+  Game -->|flash| Stage[render/stage — three.js]
+  Rules -->|state| Stage
+  Physics -->|body poses| Stage
+  Disk -->|pearl phases, disk angle| Stage
+  Rules -->|state, notices| HUD[ui/hud — DOM]
+  Debug[ui/debugMenu] -->|tunables, cheats, lights| Game
 ```
 
 | Module | Owns | Must not |
 |--------|------|----------|
-| `src/config.ts` | Every tunable: geometry (cm), payouts, ladder values, durations | — |
+| `src/config.ts` | Every rule and geometry tunable: geometry (cm), payouts, ladder values, durations. Mutable, so the debug menu can change values live | — |
 | `src/rng.ts` | Seeded PRNG (mulberry32) | — |
-| `src/rules/game.ts` | Credits, shots, tickets, ladders, parties, jackpot, payouts; returns `Effect[]`; chance rolls via an injected `next()` | import three/Rapier, read wall-clock time |
-| `src/sim/physics.ts` | Rapier world: peg board, slots, tray, rails, pusher, back scraper; ball bodies; exit classification | know payouts |
-| `src/sim/disk.ts` | Pearl-in-groove dynamics on the spinning pocket disk; pocket capture | know payouts |
-| `src/render/*` | Scene, camera, cabinet meshes, instanced balls, LCD canvas texture, disk texture | mutate game state |
-| `src/ui/hud.ts` | DOM counters, party countdown, event feed | — |
-| `src/main.ts` | Bootstrap, fixed-step loop, event routing | contain rules |
+| `src/rules/game.ts` | Credits, shots, tickets, ladders, parties, jackpot, payouts, tower pearl reserve; returns `Effect[]` | import three, Rapier, or audio; read wall-clock time |
+| `src/sim/physics.ts` | Rapier world: peg board, slots, tray, rails, pusher, scraper; ball bodies; exits; impact detection; stall recovery | know payouts |
+| `src/sim/disk.ts` | Pearl path after the tray: chute → disk groove → pocket → tower lift → reserve | know payouts |
+| `src/app.ts` | `Game`: fixed-step loop, input, event routing, sound/flash cues, reset, mute; `debugControls()` | contain rules |
+| `src/render/stage.ts` | Renderer, camera rig, bloom, environment map, lights, instanced balls and pearls, LED animation, LCD repaint | mutate game state |
+| `src/render/cabinet.ts` | Static cabinet geometry and materials, pearl lift and reserve positions | — |
+| `src/render/textures.ts`, `lcd.ts` | Procedural canvas art (panel, logo, slot windows, signs, disk face, 7-segment display, LCD) | — |
+| `src/render/settings.ts` | Live view tunables (`VIEW`): camera, render, LEDs | — |
+| `src/audio/sound.ts` | `SoundEngine`: synthesis, mix, music sequencer | — |
+| `src/ui/hud.ts`, `debugMenu.ts` | DOM overlay and the data-driven debug panel | — |
+| `src/main.ts` | Reads the URL and boots `Game` into `#app` | — |
 
 ## Time and determinism
 
-- Simulation runs on a fixed 1/120 s step with an accumulator, capped at 8 steps per frame to avoid a spiral of death.
-- Rules receive simulated time (`simTime`), never `performance.now()`, so party timers pause when the tab is hidden and tests stay exact.
-- Every random draw (shot entry and spread, drop positions, LUCKY rolls, pearl entry speed) uses the seeded RNG (`?seed=N`).
-- Measured cost: ~0.4 ms per physics step with ~150 bodies (≈5% of a core at 120 Hz).
+- Simulation runs on a fixed 1/120 s step with an accumulator, capped at 8 steps per frame to avoid a spiral of death. The debug time scale multiplies real time before the accumulator.
+- Rules receive simulated time (`simTime`), never `performance.now()`. Party timers therefore pause when the tab is hidden, and tests stay exact.
+- Every random draw (shot entry and spread, drop positions, pearl entry speed) uses the seeded RNG (`?seed=N`).
+- Measured cost: about 0.4 ms per physics step with ~150 bodies, roughly 5% of a core at 120 Hz.
+
+## Pearl circulation
+
+Pearls are a fixed set (`TRAY.initialPearls` on the tray plus `RULES.pearlReserveStart` in the tower), as on the reference cabinet, where pearls ride back up the clear tower.
+
+```mermaid
+flowchart LR
+  Tray -->|pushed off front| Chute --> Disk[disk groove] -->|settles| Pocket -->|pays| Lift
+  Tray -->|falls off a side| Lift[tower lift]
+  Lift --> Reserve[tower reserve] -->|LUCKY slot| Tray
+```
+
+`disk.test.ts` checks conservation: every launched pearl pockets exactly once, and every pearl returns exactly once.
 
 ## Physics model (units: cm, gravity −981 cm/s²)
 
-- **Peg board:** two acrylic panes 4.8 cm apart confine balls to a near-2D fall. Static cylinder pegs in centered,
-  staggered rows plus wall bumpers on every row, so no free lane runs down the sides. Seven slot bins sit at the bottom.
-  A ball whose center drops below the bin line is consumed and reported as `slot(i)`.
-  - **No CCD.** Peak speed (~3 cm/step at 120 Hz) can't skip the 5.2 cm a ball needs to clear a peg. Hard CCD froze
-    touching bodies (repeated zero time-of-impact); soft CCD's predictive contacts held balls in mid-air.
-  - Contact prediction is cut to 0.2 cm (`normalizedPredictionDistance = 0.002`). Rapier's default scales to 2 cm at
-    `lengthUnit = 100`, enough for two pegs' prediction bands to cradle a ball between them.
-  - Board balls collide with statics only (collision groups). Two balls side by side otherwise arch between pegs and jam the board.
-  - Stall recovery, like cabinet vibration: a ball at rest for 0.6 s is kicked; after three kicks it drops straight into
-    the bin below where it stalled. `src/sim/physics.test.ts` requires every shot to reach a slot across seeded bursts.
-- **Tray:** static floor. Low side rails stop 7 cm short of the front edge; balls at the open corners fall off the sides. The front edge is open.
-- **Pusher:** kinematic box moving sinusoidally along z. A fixed scraper wall just above the pusher top sweeps riders off on the retract stroke.
-  The initial pile settles with the pusher parked, so nothing spills before play.
-- **Exit classification:** below the tray and past the front edge is `frontExit`; past either side is `sideExit`.
-  White balls on `frontExit` recycle with no payout. Pearls on `frontExit` go to the disk. Everything on `sideExit` is lost.
-- **Disk:** not a Rapier simulation. A pearl rides a circular groove in world space while the holed disk rotates
-  beneath it. The pearl's speed relative to the disk decays exponentially to a small creep floor, below the
-  capture speed, so every pearl settles within one relative revolution. A pass over a hole at high speed is
-  an "in and out".
+- **Peg board:** two acrylic panes 4.8 cm apart confine balls to a near-2D fall.
+  - Static cylinder pegs sit in centered, staggered rows, plus wall bumpers on every row, so no free lane runs down the sides.
+  - Seven slot bins sit at the bottom. A ball whose center drops below the bin line is consumed and reported as `slot(i)`.
+  - **No CCD.** Peak speed (~3 cm/step at 120 Hz) can't skip the 5.2 cm a ball needs to clear a peg. Hard CCD froze touching bodies (repeated zero time-of-impact); soft CCD's predictive contacts held balls in mid-air.
+  - **Contact prediction** is cut to 0.2 cm (`normalizedPredictionDistance = 0.002`). Rapier's default scales to 2 cm at `lengthUnit = 100`, which is enough for two pegs' prediction bands to cradle a ball between them.
+  - **Collision groups:** board balls collide with static geometry only. Otherwise two balls side by side arch between pegs and jam the board.
+  - **Stall recovery,** like cabinet vibration: a ball at rest for 0.6 s is kicked. After three kicks it drops straight into the bin below where it stalled. Tests: every shot reaches a slot across seeded bursts, and a held ball is rescued into the slot below it.
+- **Tray:** static floor. Low side rails stop 7 cm short of the front edge, so balls at the open corners fall off the sides; the front edge is open.
+- **Pusher:** a kinematic box moving sinusoidally along z. A fixed scraper wall just above the pusher sweeps riders off on the retract stroke. The initial pile settles with the pusher parked, so nothing spills before play.
+- **Exits:** a body below the tray and past the front edge is a `frontExit`; past either side, a `sideExit`.
+  - White balls on `frontExit` recycle with no payout.
+  - Pearls on `frontExit` go to the disk.
+  - Pearls on `sideExit` ride the lift without paying.
+- **Impacts:** each step compares every body's velocity change with gravity's. A change of more than 30 cm/s emits `impact(kind, intensity, x)` for sound; kind is peg, tray, or pearl.
+- **Disk:** not a Rapier simulation. A pearl rides a circular groove in world space while the holed disk rotates beneath it.
+  - The pearl's speed relative to the disk decays exponentially to a small creep floor below the capture speed, so every pearl settles.
+  - A pass over a hole at high speed is an "in and out".
 
 ## Rendering
 
-- White balls and pearls each use one `InstancedMesh`; matrices are written from Rapier poses each frame.
-- Pegs are one `InstancedMesh`. Acrylic panes are transparent standard materials; `MeshPhysicalMaterial` transmission is too expensive.
-- The LCD is a `CanvasTexture` redrawn only when `rules.version` changes, plus once per second while a party countdown runs.
+The cabinet is modeled on reference frames from the videos in `media/`: layout, palette, and finish only, with no logos or character art.
+
+- **Board area:** a black circuit-art back panel with silver "wing" traces, satin screw pegs over the LCD, gold-framed slot windows, and yellow neon chevrons.
+- **Tray area:** a mirror tray, acrylic walls, and PEARL / BIG PEARL side signs.
+- **Pearl column:** a clear hexagonal tower with an LED strip and the pearl reserve, and the pocket disk in an LED bowl at its foot.
+- **Top and front:** a red seven-segment jackpot counter, a topper sign, and a slanted control deck with speaker grilles.
+- **Materials:** pegs use a rougher "satin" finish because mirror chrome on dozens of small heads bloomed into a glare patch over the LCD. The LCD's peak white is held under the bloom threshold.
+- **Lighting:**
+  - Reflections come from a PMREM environment generated from a small arcade-room scene: ceiling strips and neon side panels.
+  - Hemisphere, key (shadows), and four colored point lights are registered for the debug light editor.
+- **Instancing:** white balls, pearls (tray, disk, lift, and reserve), pegs, and LEDs are each one `InstancedMesh`.
+- **Animation:** tower LEDs chase cyan (rainbow during parties); the bowl ring cycles hues; chevrons pulse during parties.
+- **LCD:** a 1280×720 `CanvasTexture` repainted at 20 Hz.
+  - A cached galaxy backdrop sits behind a value wheel showing the live pocket pays (SUPER plus the jackpot during Ball Party).
+  - The wheel's hub shows LUCKY BALL with the tower count; curved ladders follow its rim; party banners carry countdowns.
+  - Flash overlays mark jackpot, party, and lucky events.
+- **Camera:** an orbit rig (distance, pitch, yaw, target) from `VIEW`. On narrow screens it backs off until the cabinet width fits; free orbit is a debug option.
+
+## Sound
+
+`SoundEngine` (src/audio/sound.ts) is pure Web Audio: oscillators, one generated noise buffer, filters, envelopes, and a convolver with a generated impulse response.
+
+- **Mix:** SFX, music (ducked under jingles), and ambience buses feed a master gain, a glue compressor, and a limiter.
+- **Reference measurements:** taken from `media/NEW PUSHER… [3-koMfby63A].mkv` and the expo clip. Commentary overlaps, so they are approximate.
+  - Peg clicks peak at 1.2–2.0 kHz (0:27, 6:38, 9:20) and are modeled as a 1.6–2.8 kHz band-passed noise click plus a faint ring.
+  - The idle and attract music pulses at about 92 BPM in both cabinet clips → a G-major I–vi–IV–V bed.
+  - Party Time (1:19, 1:32) pulses at about 199/min with a brighter spectrum → a G-minor bed at 100 BPM: eighth hats, kick, claps, bass, and a square lead.
+  - Ticket Party is the lighter major variant.
+- **Cues:** launch whoosh, tray clatter, pearl thump, slot jingles (BALL arpeggio, TICKET bell, LUCKY sparkle), lucky win/miss, pocket payouts scaled by tier, jackpot (brass stabs, siren, bell run), party start/end, credit "ka-ching".
+- **Ambience:** mains hum, a pusher motor following pusher speed, and a disk rattle while pearls roll.
+- **Budget:** impacts are throttled per kind and capped at 12 concurrent voices; quiet hits are dropped when busy.
+- **Unlock and mute:** nothing is created before the first user gesture (`unlock()`). Muting stops voice creation and silences the master gain.
+
+## Testing
+
+- **unit (Node):** rules, the pocket disk (pearl conservation), and physics (board drain, exits, impacts, drops, stall rescue).
+- **browser (headless Chromium):**
+  - `Game` flows: input, launching, slots, the pearl path, parties, the jackpot, buttons, mute persistence, the debug wiring, and the main entry.
+  - Stage view settings and portrait camera fit.
+  - The LCD's content per state, and seven-segment pixels.
+  - The HUD.
+  - The debug panel DOM: params, presets, the light editor, keys.
+  - Sound, rendered offline: every cue is audible and releases its voices; plus loudness ordering, throttling, mute, and music beds.
+- `npm run coverage` enforces 90% statements, branches, functions, and lines.
 
 ## Extension points
 
-- Payout multipliers (the source shows values beyond the table): add to `rules` via config; the disk does not change.
-- Four-player cabinet: instantiate N stations, each with its own `GameRules` and physics sub-world, sharing one jackpot.
+- **Payout multipliers:** the source shows values beyond the table. Add them to `rules` via config; the disk does not change.
+- **Four-player cabinet:** instantiate N stations, each with its own `GameRules` and physics sub-world, sharing one jackpot.

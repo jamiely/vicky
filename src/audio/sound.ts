@@ -34,7 +34,7 @@ const POCKET_TICKS: Record<PocketColor, number> = { green: 4, red: 6, yellow: 10
 const PENTATONIC = [0, 2, 4, 7, 9];
 
 export class SoundEngine {
-  private ctx: AudioContext | null = null;
+  private ctx: BaseAudioContext | null = null;
   private master!: GainNode;
   private sfx!: GainNode;
   private music!: GainNode;
@@ -45,7 +45,7 @@ export class SoundEngine {
   private noise!: AudioBuffer;
   private isMuted = false;
   private voices = 0;
-  private readonly lastImpact: Record<ImpactKind, number> = { peg: 0, tray: 0, pearl: 0, disk: 0 };
+  private readonly lastImpact: Record<ImpactKind, number> = { peg: -Infinity, tray: -Infinity, pearl: -Infinity, disk: -Infinity };
   private mode: Music = 'idle';
   private step = 0;
   private nextStepTime = 0;
@@ -53,12 +53,15 @@ export class SoundEngine {
   private lastUpdate = 0;
   private timer = 0;
 
+  /** `createContext` is the audio device factory; tests inject an `OfflineAudioContext` to render deterministically. */
+  constructor(private readonly createContext: () => BaseAudioContext = () => new AudioContext()) {}
+
   unlock(): void {
     if (this.ctx) {
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      if (this.ctx instanceof AudioContext && this.ctx.state === 'suspended') void this.ctx.resume();
       return;
     }
-    const ctx = new AudioContext();
+    const ctx = this.createContext();
     this.ctx = ctx;
 
     // Mix: buses → master → glue compressor → brick-wall-ish limiter → speakers.
@@ -111,12 +114,27 @@ export class SoundEngine {
   /** Stops the sequencer and releases the audio device. */
   close(): void {
     window.clearInterval(this.timer);
-    void this.ctx?.close();
+    if (this.ctx instanceof AudioContext) void this.ctx.close();
     this.ctx = null;
   }
 
   get muted(): boolean {
     return this.isMuted;
+  }
+
+  /** Sounds currently playing (diagnostics and voice-limit tests). */
+  get activeVoices(): number {
+    return this.voices;
+  }
+
+  /** Music bed currently selected by `update()`. */
+  get musicMode(): Music {
+    return this.mode;
+  }
+
+  /** True once `unlock()` has created the audio device. */
+  get unlocked(): boolean {
+    return this.ctx !== null;
   }
 
   setMuted(muted: boolean): void {
@@ -144,12 +162,12 @@ export class SoundEngine {
     switch (kind) {
       case 'peg':
         // Hollow celluloid ball on a chrome screw: 1.6–2.8 kHz click + faint ring (measured peaks 1.2–2.0 kHz).
-        this.noiseHit(t, 0.016, 'bandpass', (1600 + 1200 * v) * jitter, 5, 0.16 * v, this.sfx, pan);
-        this.tone(t, (2700 + 900 * v) * jitter, 0.03, 'sine', 0.05 * v, this.sfx, pan);
+        this.noiseHit(t, 0.016, 'bandpass', (1600 + 1200 * v) * jitter, 5, 0.6 * v, this.sfx, pan);
+        this.tone(t, (2700 + 900 * v) * jitter, 0.03, 'sine', 0.08 * v, this.sfx, pan);
         break;
       case 'tray':
         // Balls landing in the pile: duller, lower clatter.
-        this.noiseHit(t, 0.035, 'bandpass', (900 + 700 * v) * jitter, 2.2, 0.14 * v, this.sfx, pan);
+        this.noiseHit(t, 0.035, 'bandpass', (900 + 700 * v) * jitter, 1.2, 1.1 * v, this.sfx, pan);
         break;
       case 'pearl':
         // Heavy resin pearl: low thump with a short knock.
@@ -157,7 +175,7 @@ export class SoundEngine {
         this.noiseHit(t, 0.05, 'lowpass', 900, 0.8, 0.18 * v, this.sfx, pan);
         break;
       case 'disk':
-        this.noiseHit(t, 0.02, 'highpass', 2600, 1, 0.1 * v, this.sfx, pan);
+        this.noiseHit(t, 0.02, 'highpass', 2600, 1, 0.3 * v, this.sfx, pan);
         break;
     }
   }
@@ -378,7 +396,8 @@ export class SoundEngine {
   /** Lookahead sequencer: schedules 16th-note steps of the current music bed slightly ahead of audio time. */
   private schedule(): void {
     const ctx = this.ctx!;
-    if (ctx.state !== 'running') return;
+    // A suspended context's clock is frozen, so this schedules at most one lookahead window until it resumes.
+    if (ctx.state === 'closed') return;
     const stepDur = 60 / MUSIC_BPM[this.mode] / 4;
     if (this.nextStepTime < ctx.currentTime - 0.5) this.nextStepTime = ctx.currentTime + 0.05; // tab was hidden
     while (this.nextStepTime < ctx.currentTime + LOOKAHEAD) {

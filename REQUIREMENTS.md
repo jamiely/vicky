@@ -34,12 +34,12 @@ video, real ticket dispensing, and real money.
 4. **Slot outcomes:**
    - `BALL`: drops N white balls onto the tray ([T 02:51] "every time you hit the ball slot it jumps an amount of balls") and advances the **ball ladder**.
    - `TICKET`: awards the current ticket-ladder value (8 → 10 → 12 → 15 → 20 → 25 → 30 → 40; contains the run 15·20·25·?·40 seen at [F 10:13]) and advances the **ticket ladder**.
-   - `BIG BALL LUCKY`: 15% chance to drop one big pearl onto the tray ([T 04:06] "big ball, we always like the big balls"). [INF: the label says "lucky"; a guaranteed pearl floods the tray]
+   - `BIG BALL LUCKY`: releases one big pearl from the tower reserve onto the tray, if the tower holds any ([T 04:06] "big ball, we always like the big balls"). [INF: exact center-slot effect]
    - Advancing one ladder knocks the other back two steps ([T 03:45] "we lost some progress cuz we went into a ticket", [T 04:03] "we got a ticket, that means we go backwards", [T 04:15] "continuously two away"). [INF: exact amount]
 5. **Party Time.** Topping a ladder (8 beads) starts that ladder's party for 31 s ([T 01:47] "31 seconds double balls and party time", [T 08:02] "33 seconds"). The ladder then resets. Ladder length and knockback are tuned so Ball Party Time arrives ~15×/hour (~13% of play); the source video shows ~4 in 14 minutes. With 5 beads, a party would be running more than half the time.
    - **Ball Party Time:** `BALL` slot drops double balls; disk pockets pay party values; yellow pays the progressive jackpot ("SUPER"). The jackpot can be won more than once per party ([T 02:03] "double super bonus in one party time").
    - **Ticket Party Time:** `TICKET` slot pays the top ladder value on every hit. [INF: effect; players call it the weaker party, [T 06:49]]
-6. **Pusher tray.** The pusher oscillates continuously. White balls pushed over the **front** edge recycle into the machine with no payout. [INF; refunding shots made credits unnecessary] Balls or pearls over a **side** edge (the rail-free front corners) are lost. [T 03:22]
+6. **Pusher tray.** The pusher oscillates continuously. White balls pushed over the **front** edge recycle into the machine with no payout. [INF; refunding shots made credits unnecessary] Pearls over a **side** edge (the rail-free front corners) pay nothing. [T 03:22]
 7. **Pearls and the disk.** A pearl pushed over the front edge is routed to the spinning disk, settles into a colored pocket, and pays by color:
 
    | Pocket | Normal | Ball Party Time | Evidence |
@@ -49,13 +49,20 @@ video, real ticket dispensing, and real money.
    | yellow | 120    | progressive jackpot, reset to base | [T 01:25] "yellow's worth 1200", [T 01:32] "super jackpot", [T 06:03] "still 120" off-party |
 
    Observed values also include 80, 150, 160, 220, 380, 400, and 420 ([T 11:01]–[T 12:30]). The source likely uses a multiplier this spec does not model; keep payouts in config so a multiplier can be added later.
-8. **Persistence within a session.** Tray contents carry across credits; the machine starts with ~4 pearls on the tray ([T 03:12] "this one's got four pearls already on it").
+8. **Pearl circulation.** Pearls are a fixed set that circulates: tray → (front edge) disk pocket → tower lift → tower reserve → LUCKY → tray. Side losses skip the disk. The clear tower beside the tray visibly holds the waiting pearls, and the LCD hub shows "LUCKY BALL" with the count ([F 04:41], [F 10:13], demo 0:20). The machine starts with ~4 pearls on the tray ([T 03:12] "this one's got four pearls already on it") and 4 in the tower. Tray contents carry across credits.
 
 ## 3. Presentation
 
-- Real-time 3D scene: cabinet frame, acrylic peg board, LCD panel (procedural canvas texture), tray, pusher, chute, disk.
-- The LCD mirrors rule state: both ladders, the active party with countdown, current pocket values, and the jackpot.
-- The HUD shows credits, shots, tickets won, and the jackpot. Buttons: insert credit, launch (hold to auto-fire), reset.
+- Real-time 3D scene modeled on reference frames:
+  - Board area: circuit-art back panel, screw pegs over the LCD, gold slot windows, neon chevrons.
+  - Tray area: mirror tray with side signs.
+  - Pearl column: clear LED tower holding the reserve, and the pocket disk in an LED bowl.
+  - Top and front: red seven-segment jackpot counter, topper sign, control deck.
+  - Effects: bloom and reflections.
+- The LCD mirrors rule state: both ladders, the active party with countdown, current pocket values, the jackpot, the tower count, and celebration flashes.
+- Sound is synthesized: peg clicks, launch, tray clatter, pearl thumps, slot jingles, payouts, jackpot fanfare, idle and party music beds, cabinet ambience. A mute toggle is remembered.
+- The HUD shows credits, shots, tickets won, and the jackpot. Buttons: insert credit, launch (hold to auto-fire), reset, sound.
+- Debug menu (`?debug=1`): live camera, render, simulation, and rule tunables; cheats; light editor; presets.
 - Input: press anywhere on the cabinet, the LAUNCH button, or Space; holding auto-fires.
 - Targets: 60 fps on a recent laptop with ~300 simulated balls; layout usable at 390 px wide.
 
@@ -73,3 +80,6 @@ video, real ticket dispensing, and real money.
 5. Topping a ladder starts a 31 s party with a visible countdown that ends on time.
 6. A pearl pushed off the front lands in a disk pocket and pays the table value for the current mode; yellow during Ball Party pays and resets the jackpot.
 7. The rules core has unit tests covering 4–6 that do not depend on physics or rendering.
+8. Every pearl is always visible (tray, chute, disk, lift, or tower), and LUCKY releases a pearl while the tower holds one.
+9. Every game event has a distinct synthesized sound; nothing plays before the first user gesture or while muted.
+10. `npm run coverage` passes with ≥ 90% statements, branches, functions, and lines.

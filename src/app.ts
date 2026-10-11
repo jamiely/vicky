@@ -1,3 +1,4 @@
+import './style.css';
 import { SoundEngine } from './audio/sound';
 import { BOARD, DISK, PUSHER, RULES, SIM, SLOTS, TRAY, type PocketColor, type SlotKind } from './config';
 import { Stage } from './render/stage';
@@ -17,6 +18,19 @@ export interface GameOptions {
   debug: boolean;
   /** Start the requestAnimationFrame loop; tests drive `frame()` manually instead. */
   autoStart: boolean;
+}
+
+/**
+ * Page URL → options: `?seed=N` makes the machine reproducible (random otherwise); `?debug` or `?debug=1` mounts the
+ * debug menu, `?debug=0` does not.
+ */
+export function optionsFromUrl(search: string, random: () => number): Omit<GameOptions, 'autoStart'> {
+  const params = new URLSearchParams(search);
+  const seed = Number(params.get('seed'));
+  return {
+    seed: params.has('seed') && Number.isFinite(seed) ? seed : Math.floor(random() * 2 ** 31),
+    debug: params.has('debug') && params.get('debug') !== '0',
+  };
 }
 
 /**
@@ -52,7 +66,10 @@ export class Game {
     const physics = await PhysicsWorld.create(rng);
     loading.remove();
     const game = new Game(root, rng, physics);
-    if (options.debug) createDebugMenu(document.body, debugControls(game), true);
+    if (options.debug) {
+      const menu = createDebugMenu(document.body, debugControls(game), true);
+      game.cleanups.push(() => menu.dispose());
+    }
     if (options.autoStart) game.start();
     return game;
   }
