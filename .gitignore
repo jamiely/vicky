@@ -4,3 +4,4 @@ coverage/
 media
 /*.webm
 /*.mkv
+dist_electron/

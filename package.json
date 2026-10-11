@@ -3,25 +3,69 @@
   "private": true,
   "version": "0.2.0",
   "type": "module",
+  "main": "electron/main.mjs",
+  "description": "Offline-ready 3D pearl pusher arcade game",
+  "author": "Jamie Ly",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@dimforge/rapier3d-compat": "^0.21.0",
-    "three": "^0.186.1"
+    "typecheck": "tsc --noEmit",
+    "build:electron:web": "tsc --noEmit && vite build",
+    "electron:start": "npm run build:electron:web && electron .",
+    "electron:dev": "node scripts/electron-dev.mjs",
+    "electron:smoke": "npm run build:electron:web && node scripts/electron-smoke.mjs",
+    "build:electron:win": "npm run build:electron:web && electron-builder --win portable nsis --x64 --publish never",
+    "build:electron:mac": "npm run build:electron:web && electron-builder --mac dmg zip --publish never"
   },
   "devDependencies": {
+    "@dimforge/rapier3d-compat": "^0.21.0",
     "@types/three": "^0.186.0",
     "@vitest/browser-playwright": "^5.0.3",
     "@vitest/coverage-v8": "^5.0.3",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
     "playwright": "^1.64.0",
+    "three": "^0.186.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^5.0.3"
+  },
+  "build": {
+    "appId": "com.jamiely.neonreef",
+    "productName": "Neon Reef",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "!electron/smoke.mjs",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable",
+        "nsis"
+      ]
+    },
+    "portable": {
+      "artifactName": "Neon-Reef-${version}-win-${arch}-portable.${ext}"
+    },
+    "nsis": {
+      "artifactName": "Neon-Reef-${version}-win-${arch}-setup.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "category": "public.app-category.arcade-games",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "artifactName": "Neon-Reef-${version}-mac-${arch}.${ext}"
+    }
   }
 }

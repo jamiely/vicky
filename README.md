@@ -59,6 +59,32 @@ Rendering, sound, and UI tests run in real headless Chromium:
 - Sound tests render through an `OfflineAudioContext` and check the signal each cue produces.
 - Rules and simulation tests run in Node.
 
+## Desktop (Electron)
+
+The desktop app is an offline game, modeled on the `../stack` repo's Electron setup.
+
+- It serves the built game from `dist/` over a private `vicky://app` protocol.
+- The renderer is sandboxed, with no Node integration and no remote navigation.
+- It opens fullscreen: `Escape` quits and `F11` toggles fullscreen.
+
+```sh
+npm run electron:start      # build and launch
+npm run electron:dev        # Vite hot reload inside Electron (port 5174)
+npm run electron:smoke      # real-window check; saves dist_electron/electron-smoke.png
+npm run build:electron:win  # Windows x64 portable + NSIS installer
+npm run build:electron:mac  # macOS dmg + zip (unsigned: right-click → Open the first time)
+```
+
+`electron:smoke` checks:
+- WebGL renders.
+- Every asset comes from `vicky://app`.
+- A real Space key press launches balls into a slot, and audio unlocks.
+- LUCKY releases a pearl onto the tray.
+- A pearl pushed off the tray reaches the disk.
+
+`.github/workflows/release-electron.yml` builds, smoke-tests, and packages the Windows app on every push and pull request. Every push to `main` refreshes the rolling `latest` prerelease; a `v*` tag publishes a versioned release.
+For LaunchBox, point it at the `portable.exe`.
+
 ## Docs
 
 - [REQUIREMENTS.md](REQUIREMENTS.md): rules, each tagged with evidence from the reference videos (frame or transcript timestamps) or marked as inference/tuning.
