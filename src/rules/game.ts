@@ -8,7 +8,7 @@ export interface Notice {
 }
 
 /**
- * Pure game rules. Driven by simulated time (`tick`) and physics outcomes (`onSlot`, `onPocket`, `returnBall`);
+ * Pure game rules. Driven by simulated time (`tick`) and physics outcomes (`onSlot`, `onPocket`);
  * answers with `Effect`s the physics layer must perform. Fields are public for read-only use by HUD/LCD.
  */
 export class GameRules {
@@ -40,12 +40,6 @@ export class GameRules {
     this.shots--;
     this.version++;
     return true;
-  }
-
-  /** A white ball pushed off the front edge goes back into the shot bank. */
-  returnBall(): void {
-    this.shots++;
-    this.version++;
   }
 
   tick(now: number): void {

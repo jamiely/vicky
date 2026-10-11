@@ -30,7 +30,8 @@ export const TRAY = {
   front: 22, // z of the open front edge (toward the player)
   floorBack: -34,
   railHeight: 1.6, // below a ball's center: crowded balls can spill over the sides
-  initialBalls: 170,
+  openCorner: 7, // rail-free length at each front corner; balls there fall off the side (a loss)
+  initialBalls: 110, // about one layer; more spills during settling
   initialPearls: 4,
 };
 
@@ -50,13 +51,13 @@ export const BOARD = {
   gap: 4.8, // inner distance between the acrylic panes
   halfWidth: 30,
   top: 82,
-  binTop: 26, // top of the slot dividers
-  binFloor: 18,
+  binTop: 22, // top of the slot dividers; ≥ 2 ball diameters below the last peg row avoids wedging
+  binFloor: 15,
   pegRadius: 0.6,
   pegRows: 8,
   pegRowSpacing: 6.2,
   pegColSpacing: 7.4,
-  pegTopRowY: 72,
+  pegTopRowY: 74,
   launchY: 79,
 };
 

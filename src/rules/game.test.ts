@@ -22,9 +22,9 @@ describe('credits and shots', () => {
     const g = new GameRules();
     g.credits = 0;
     expect(g.tryLaunch()).toBe(false);
-    g.returnBall();
+    g.addCredits(1);
     expect(g.tryLaunch()).toBe(true);
-    expect(g.shots).toBe(0);
+    expect(g.shots).toBe(RULES.shotsPerCredit - 1);
   });
 });
 
