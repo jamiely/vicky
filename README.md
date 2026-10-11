@@ -4,6 +4,8 @@ A 3D browser ball-pusher that recreates the gameplay, look, and sound of the *Vi
 three.js renders the cabinet with bloom, Rapier simulates every ball, and Web Audio synthesizes all sound.
 Branding, art, and audio are original; nothing is copied from the reference footage.
 
+![Ball Party: balls rain from the peg board while the pusher feeds pearls toward the pocket disk](docs/media/gameplay.gif)
+
 **Play:** https://jamiely.github.io/vicky/ (deployed by `.github/workflows/deploy.yml` on every push to `main`).
 
 ## Run
@@ -20,6 +22,7 @@ Opening the repository's root `index.html` directly does not work. It is the Vit
 ## Play
 
 - **Hold** LAUNCH, Space, or the cabinet itself to fire balls into the peg board (2/s). Shots cannot be aimed.
+- **Credits:** press `C` or click **+5 CREDITS** to add five credits. Holding `C` adds only one batch, not one per key repeat.
 - Balls land in `BALL · TICKET · BALL · BIG BALL LUCKY · TICKET · BALL · TICKET`.
   - **BALL** drops white balls onto the pusher tray and climbs the ball ladder.
   - **TICKET** pays the ticket-ladder value and climbs the ticket ladder.
@@ -83,6 +86,22 @@ npm run build:electron:win  # Windows x64 portable + NSIS installer
 
 `.github/workflows/release-electron.yml` builds, smoke-tests, and packages the Windows app on every push and pull request. Every push to `main` refreshes the rolling `latest` prerelease; a `v*` tag publishes a versioned release.
 For LaunchBox, point it at the `portable.exe`.
+
+### Vermilion cabinet controls
+
+The Windows x64 Electron portable build is installed in LaunchBox's **Arcade** platform as **Neon Reef** at `C:\arcade\Neon Reef\Neon-Reef-0.2.0-win-x64-portable.exe`.
+
+Both connected controllers use the same two physical button numbers as the existing cabinet profiles:
+
+| Button | JoyToKey key | Action |
+| --- | --- | --- |
+| 7 | Space | Hold to fire; release to stop |
+| 5 | C | Add five credits; hold for 1.5 seconds to exit |
+
+LaunchBox's before-launch additional application runs `C:\arcade\Neon Reef\JoyToKey_NeonReef.ahk`, which loads `Documents\JoyToKey\NeonReef.cfg`. The hold-to-exit shortcut is scoped to the game's window. The hook stops JoyToKey and releases its mapped keys when the game exits, so its bindings do not remain active in LaunchBox. Other games' profiles are unchanged.
+
+The installed game and mapped Windows keys were exercised remotely; physical button presses still need a cabinet-side check.
+
 
 ## Docs
 
