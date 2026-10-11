@@ -31,7 +31,7 @@ export const TRAY = {
   floorBack: -34,
   railHeight: 1.6, // below a ball's center: crowded balls can spill over the sides
   openCorner: 7, // rail-free length at each front corner; balls there fall off the side (a loss)
-  initialBalls: 110, // about one layer; more spills during settling
+  initialBalls: 64, // roughly the steady-state pile: one layer ahead of the pusher's full stroke
   initialPearls: 4,
 };
 
@@ -62,7 +62,7 @@ export const BOARD = {
 };
 
 export const DISK = {
-  center: { x: 46, y: -8, z: 32 },
+  center: { x: 44, y: -4, z: 24 },
   radius: 14,
   grooveRadius: 10,
   holeRadius: 2.9,

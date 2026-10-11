@@ -39,6 +39,11 @@ export class PhysicsWorld {
     return new PhysicsWorld(rng);
   }
 
+  /** Releases the WASM world; the instance is unusable afterwards. */
+  dispose(): void {
+    this.world.free();
+  }
+
   private constructor(private readonly rng: Rng) {
     this.world = new RAPIER.World({ x: 0, y: GRAVITY, z: 0 });
     this.world.timestep = SIM.step;
@@ -56,7 +61,11 @@ export class PhysicsWorld {
     );
 
     this.fillTray();
-    for (let i = 0; i < 360; i++) this.step(); // settle the initial pile before the first frame
+    // Settle the initial pile with the pusher parked (time stays 0, so its first stroke starts from here).
+    for (let i = 0; i < 360; i++) {
+      this.world.step();
+      this.classify();
+    }
   }
 
   queueDrop(kind: BodyKind, count = 1): void {
@@ -196,21 +205,29 @@ export class PhysicsWorld {
     }
   }
 
+  /** Pearls sit on the floor first; white balls pack around them back-to-front so the pile starts behind the edge. */
   private fillTray(): void {
+    const pearls: { x: number; z: number }[] = [];
+    for (let i = 0; i < TRAY.initialPearls; i++) {
+      const x = -18 + i * 12 + this.rng.range(-2, 2);
+      const z = this.rng.range(PUSHER.frontMax + PEARL_RADIUS + 2, 10);
+      this.addBody('pearl', x, PEARL_RADIUS + 0.05, z, false);
+      pearls.push({ x, z });
+    }
     const spacing = BALL_RADIUS * 2.1;
     const cols = Math.floor((2 * TRAY.halfWidth - 2) / spacing);
+    const clear = PEARL_RADIUS + BALL_RADIUS + 0.2;
     let placed = 0;
     for (let layer = 0; placed < TRAY.initialBalls; layer++) {
-      for (let z = TRAY.front - 3; z > PUSHER.frontMax + 1 && placed < TRAY.initialBalls; z -= spacing) {
+      for (let z = PUSHER.frontMax + BALL_RADIUS + 1; z < TRAY.front - 2 && placed < TRAY.initialBalls; z += spacing) {
         for (let c = 0; c < cols && placed < TRAY.initialBalls; c++) {
           const x = -TRAY.halfWidth + 1 + spacing / 2 + c * spacing + (layer % 2) * (spacing / 2) * 0.5;
-          this.addBody('ball', x, BALL_RADIUS + 0.1 + layer * spacing, z, false);
+          const y = BALL_RADIUS + 0.1 + layer * spacing;
+          if (layer === 0 && pearls.some((p) => Math.hypot(p.x - x, p.z - z) < clear)) continue;
+          this.addBody('ball', x, y, z, false);
           placed++;
         }
       }
-    }
-    for (let i = 0; i < TRAY.initialPearls; i++) {
-      this.addBody('pearl', -18 + i * 12 + this.rng.range(-2, 2), 16, this.rng.range(2, 14), false);
     }
   }
 }

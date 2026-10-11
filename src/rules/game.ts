@@ -98,9 +98,10 @@ export class GameRules {
     return pay;
   }
 
-  /** Physics reports a loss (side spill); rules only announce it. */
-  noteLoss(kind: 'ball' | 'pearl'): void {
-    if (kind === 'pearl') this.notices.push({ text: 'Pearl lost down the side', tone: 'loss' });
+  /** A pearl fell off a tray side instead of reaching the disk. */
+  notePearlLost(): void {
+    this.notices.push({ text: 'Pearl lost down the side', tone: 'loss' });
+    this.version++;
   }
 
   drainNotices(): Notice[] {
