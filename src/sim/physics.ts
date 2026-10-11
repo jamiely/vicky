@@ -6,7 +6,9 @@ export type BodyKind = 'ball' | 'pearl';
 export type SimEvent =
   | { type: 'slot'; index: number }
   | { type: 'frontExit'; kind: BodyKind }
-  | { type: 'sideExit'; kind: BodyKind };
+  | { type: 'sideExit'; kind: BodyKind }
+  /** A collision jolt: `intensity` 0..1 from the velocity change beyond gravity; `x` for stereo placement. */
+  | { type: 'impact'; kind: 'peg' | 'tray' | 'pearl'; intensity: number; x: number };
 
 export interface Tracked {
   body: RAPIER.RigidBody;
@@ -16,6 +18,8 @@ export interface Tracked {
   stillFor: number;
   /** Kicks given to free this board ball from a stall. */
   kicks: number;
+  /** Velocity after the previous step, to detect collision jolts; null until the first step after spawning. */
+  lastVel: { x: number; y: number; z: number } | null;
 }
 
 const SLOT_WIDTH = (2 * BOARD.halfWidth) / SLOTS.length;
@@ -24,6 +28,9 @@ const DROP_INTERVAL = 0.07;
 const EXIT_Y = -4;
 /** Rapier groups: membership in the high 16 bits, filter in the low 16. Board balls collide with statics only. */
 const BOARD_BALL_GROUPS = (0x0001 << 16) | 0x0004;
+/** Velocity change (cm/s) beyond gravity that counts as an audible impact, and the change that counts as full volume. */
+const IMPACT_MIN = 30;
+const IMPACT_FULL = 300;
 
 /** Rapier world for one station: peg board + slots, tray, pusher, scraper. Knows nothing about payouts. */
 export class PhysicsWorld {
@@ -108,6 +115,15 @@ export class PhysicsWorld {
     for (let i = this.bodies.length - 1; i >= 0; i--) {
       const t = this.bodies[i]!;
       const p = t.body.translation();
+      const v = t.body.linvel();
+      if (t.lastVel) {
+        const jolt = Math.hypot(v.x - t.lastVel.x, v.y - (t.lastVel.y + GRAVITY * SIM.step), v.z - t.lastVel.z);
+        if (jolt > IMPACT_MIN) {
+          const kind = t.inBoard ? 'peg' : t.kind === 'pearl' ? 'pearl' : 'tray';
+          events.push({ type: 'impact', kind, intensity: Math.min(1, jolt / IMPACT_FULL), x: p.x });
+        }
+      }
+      t.lastVel = v;
       let event: SimEvent | null = null;
       if (t.inBoard) {
         if (p.y < BOARD.binFloor + BALL_RADIUS + 1.2) {
@@ -168,7 +184,7 @@ export class PhysicsWorld {
         .setCollisionGroups(inBoard ? BOARD_BALL_GROUPS : 0xffffffff),
       body,
     );
-    this.bodies.push({ body, kind, inBoard, stillFor: 0, kicks: 0 });
+    this.bodies.push({ body, kind, inBoard, stillFor: 0, kicks: 0, lastVel: null });
     return body;
   }
 

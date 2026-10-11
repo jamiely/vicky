@@ -72,7 +72,7 @@ export const BOARD = {
 };
 
 export const DISK = {
-  center: { x: 44, y: -4, z: 24 },
+  center: { x: 60, y: 0, z: 18 }, // face at y≈1, clear of the base's chrome top (y ≤ −2.2)
   radius: 14,
   grooveRadius: 10,
   holeRadius: 2.9,
