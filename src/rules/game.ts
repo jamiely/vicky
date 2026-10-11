@@ -1,4 +1,5 @@
 import { RULES, SLOTS, type PocketColor } from '../config';
+import type { Rng } from '../rng';
 
 export type Side = 'ball' | 'ticket';
 export type Effect = { type: 'dropBalls'; count: number } | { type: 'dropPearl' };
@@ -23,6 +24,9 @@ export class GameRules {
   /** Increments on every state change so views can skip redundant redraws. */
   version = 0;
   private notices: Notice[] = [];
+
+  /** `rng` decides chance outcomes (LUCKY pearl drops); tests inject a fixed source. */
+  constructor(private readonly rng: Pick<Rng, 'next'>) {}
 
   addCredits(count: number): void {
     this.credits += count;
@@ -61,7 +65,7 @@ export class GameRules {
     switch (kind) {
       case 'ball': {
         const count = RULES.ballsPerBallHit * (this.partyEnds.ball !== null ? 2 : 1);
-        this.ladder.ticket = Math.max(0, this.ladder.ticket - 1);
+        this.ladder.ticket = Math.max(0, this.ladder.ticket - RULES.ladderKnockback);
         this.notices.push({ text: `BALL: +${count} balls`, tone: 'win' });
         this.advance('ball');
         return [{ type: 'dropBalls', count }];
@@ -70,12 +74,16 @@ export class GameRules {
         const top = RULES.ticketLadder[RULES.ticketLadder.length - 1]!;
         const pay = this.partyEnds.ticket !== null ? top : RULES.ticketLadder[this.ladder.ticket]!;
         this.tickets += pay;
-        this.ladder.ball = Math.max(0, this.ladder.ball - 1);
+        this.ladder.ball = Math.max(0, this.ladder.ball - RULES.ladderKnockback);
         this.notices.push({ text: `TICKET: +${pay}`, tone: 'win' });
         this.advance('ticket');
         return [];
       }
       case 'lucky':
+        if (this.rng.next() >= RULES.luckyPearlChance) {
+          this.notices.push({ text: 'BIG BALL LUCKY: no pearl this time', tone: 'info' });
+          return [];
+        }
         this.notices.push({ text: 'BIG BALL LUCKY: pearl drop!', tone: 'win' });
         return [{ type: 'dropPearl' }];
     }

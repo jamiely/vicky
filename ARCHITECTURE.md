@@ -25,27 +25,33 @@ flowchart LR
 |--------|------|----------|
 | `src/config.ts` | Every tunable: geometry (cm), payouts, ladder values, durations | — |
 | `src/rng.ts` | Seeded PRNG (mulberry32) | — |
-| `src/rules/game.ts` | Credits, shots, tickets, ladders, parties, jackpot, payouts; returns `Effect[]` | import three/Rapier, read wall-clock time |
+| `src/rules/game.ts` | Credits, shots, tickets, ladders, parties, jackpot, payouts; returns `Effect[]`; chance rolls via an injected `next()` | import three/Rapier, read wall-clock time |
 | `src/sim/physics.ts` | Rapier world: peg board, slots, tray, rails, pusher, back scraper; ball bodies; exit classification | know payouts |
 | `src/sim/disk.ts` | Pearl-in-groove dynamics on the spinning pocket disk; pocket capture | know payouts |
 | `src/render/*` | Scene, camera, cabinet meshes, instanced balls, LCD canvas texture, disk texture | mutate game state |
-| `src/ui/*` | DOM HUD, pointer/keyboard input, aim raycast | — |
+| `src/ui/hud.ts` | DOM counters, party countdown, event feed | — |
 | `src/main.ts` | Bootstrap, fixed-step loop, event routing | contain rules |
 
 ## Time and determinism
 
 - Simulation runs on a fixed 1/120 s step with an accumulator, capped at 8 steps per frame to avoid a spiral of death.
 - Rules receive simulated time (`simTime`), never `performance.now()`, so party timers pause when the tab is hidden and tests stay exact.
-- Every random draw (shot jitter, drop positions, pearl entry speed) uses the seeded RNG.
+- Every random draw (shot entry and spread, drop positions, LUCKY rolls, pearl entry speed) uses the seeded RNG (`?seed=N`).
+- Measured cost: ~0.4 ms per physics step with ~150 bodies (≈5% of a core at 120 Hz).
 
 ## Physics model (units: cm, gravity −981 cm/s²)
 
-- **Peg board:** two acrylic panes 4.8 cm apart confine balls to a near-2D fall. Static cylinder pegs in staggered
-  rows. Seven slot bins at the bottom. A ball whose center drops below the bin line is consumed and reported as `slot(i)`.
-- **Tray:** static floor, low side rails (spill is possible when crowded), open front edge.
+- **Peg board:** two acrylic panes 4.8 cm apart confine balls to a near-2D fall. Static cylinder pegs in centered,
+  staggered rows plus wall bumpers on every row, so no free lane runs down the sides. Seven slot bins sit at the bottom.
+  A ball whose center drops below the bin line is consumed and reported as `slot(i)`.
+  - Board balls use **soft CCD** (3 cm prediction). Hard CCD froze touching balls with repeated zero time-of-impact.
+  - Board balls collide with statics only (collision groups). Two balls side by side otherwise arch between pegs and jam the board.
+  - A ball that rests for 0.6 s gets a sideways kick.
+- **Tray:** static floor. Low side rails stop 7 cm short of the front edge; balls at the open corners fall off the sides. The front edge is open.
 - **Pusher:** kinematic box moving sinusoidally along z. A fixed scraper wall just above the pusher top sweeps riders off on the retract stroke.
+  The initial pile settles with the pusher parked, so nothing spills before play.
 - **Exit classification:** below the tray and past the front edge is `frontExit`; past either side is `sideExit`.
-  White balls on `frontExit` return a shot. Pearls on `frontExit` go to the disk. Everything on `sideExit` is lost.
+  White balls on `frontExit` recycle with no payout. Pearls on `frontExit` go to the disk. Everything on `sideExit` is lost.
 - **Disk:** not a Rapier simulation. A pearl rides a circular groove in world space while the holed disk rotates
   beneath it. The pearl's speed relative to the disk decays exponentially to a small creep floor, below the
   capture speed, so every pearl settles within one relative revolution. A pass over a hole at high speed is
@@ -55,7 +61,7 @@ flowchart LR
 
 - White balls and pearls each use one `InstancedMesh`; matrices are written from Rapier poses each frame.
 - Pegs are one `InstancedMesh`. Acrylic panes are transparent standard materials; `MeshPhysicalMaterial` transmission is too expensive.
-- The LCD is a `CanvasTexture` redrawn only when the rules snapshot changes or at most 10 Hz during party countdowns.
+- The LCD is a `CanvasTexture` redrawn only when `rules.version` changes, plus once per second while a party countdown runs.
 
 ## Extension points
 

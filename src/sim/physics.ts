@@ -72,10 +72,11 @@ export class PhysicsWorld {
     for (let i = 0; i < count; i++) this.dropQueue.push(kind);
   }
 
-  spawnShot(aimX: number): void {
-    const x = Math.max(-BOARD.halfWidth + BALL_RADIUS + 0.5, Math.min(BOARD.halfWidth - BALL_RADIUS - 0.5, aimX));
+  /** Launches a shot from a random entry along the top: players cannot steer shots on the source cabinet. */
+  spawnShot(): void {
+    const x = this.rng.range(-BOARD.halfWidth + 4, BOARD.halfWidth - 4);
     const body = this.addBody('ball', x, BOARD.launchY, BOARD.z, true);
-    body.setLinvel({ x: this.rng.range(-25, 25), y: -40, z: 0 }, true);
+    body.setLinvel({ x: this.rng.range(-60, 60), y: -40, z: 0 }, true);
   }
 
   /** Advances one fixed step and reports slot hits and tray exits. */
@@ -196,8 +197,9 @@ export class PhysicsWorld {
     for (let row = 0; row < BOARD.pegRows; row++) {
       const y = BOARD.pegTopRowY - row * BOARD.pegRowSpacing;
       const count = wide - (row % 2);
-      for (let i = 0; i < count; i++) {
-        const x = (i - (count - 1) / 2) * BOARD.pegColSpacing;
+      const xs = Array.from({ length: count }, (_, i) => (i - (count - 1) / 2) * BOARD.pegColSpacing);
+      xs.push(-(hw - 1.2), hw - 1.2); // wall bumpers: no free lane down the sides
+      for (const x of xs) {
         const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x, y, BOARD.z).setRotation(PEG_AXIS_Z));
         this.world.createCollider(RAPIER.ColliderDesc.cylinder(halfGap + 0.5, BOARD.pegRadius).setRestitution(0.5), body);
         this.pegs.push({ x, y });

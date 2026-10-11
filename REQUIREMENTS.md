@@ -29,17 +29,17 @@ video, real ticket dispensing, and real money.
 ## 2. Game loop
 
 1. **Credits → shots.** One credit loads a fixed batch of shots. Each credit adds +1 to the progressive jackpot. [INF], jackpot rise [F]
-2. **Launch.** The player aims along the top of the peg board and launches one ball. Holding launch auto-fires. [INF: real cabinet shoots up a side tube; aiming stands in for skill]
+2. **Launch.** Pressing launch fires one ball into the top of the peg board at a random entry; holding auto-fires at 2 shots/s. There is no aiming: on the source cabinet players cannot steer shots ([T 09:05] "you don't really have much choice"). Measured: an aim control made the left edge (`BALL · TICKET · BALL`) a dominant strategy (66% BALL vs 31% at center).
 3. **Peg board.** The ball falls through physically simulated pegs and lands in one of the 7 slots.
 4. **Slot outcomes:**
    - `BALL`: drops N white balls onto the tray ([T 02:51] "every time you hit the ball slot it jumps an amount of balls") and advances the **ball ladder**.
-   - `TICKET`: awards the current ticket-ladder value (15 → 20 → 25 → 30 → 40) [F 10:13] and advances the **ticket ladder**.
-   - `BIG BALL LUCKY`: drops one big pearl onto the tray ([T 04:06] "big ball, we always like the big balls"). [INF: exact center-slot effect]
-   - Advancing one ladder knocks the other ladder back one step ([T 03:45] "we lost some progress cuz we went into a ticket", [T 04:03] "we got a ticket, that means we go backwards"). [INF: exact amount]
-5. **Party Time.** Topping a ladder (5 beads) starts that ladder's party for 31 s ([T 01:47] "31 seconds double balls and party time", [T 08:02] "33 seconds"). The ladder then resets.
+   - `TICKET`: awards the current ticket-ladder value (8 → 10 → 12 → 15 → 20 → 25 → 30 → 40; contains the run 15·20·25·?·40 seen at [F 10:13]) and advances the **ticket ladder**.
+   - `BIG BALL LUCKY`: 15% chance to drop one big pearl onto the tray ([T 04:06] "big ball, we always like the big balls"). [INF: the label says "lucky"; a guaranteed pearl floods the tray]
+   - Advancing one ladder knocks the other back two steps ([T 03:45] "we lost some progress cuz we went into a ticket", [T 04:03] "we got a ticket, that means we go backwards", [T 04:15] "continuously two away"). [INF: exact amount]
+5. **Party Time.** Topping a ladder (8 beads) starts that ladder's party for 31 s ([T 01:47] "31 seconds double balls and party time", [T 08:02] "33 seconds"). The ladder then resets. Ladder length and knockback are tuned so Ball Party Time arrives ~15×/hour (~13% of play); the source video shows ~4 in 14 minutes. With 5 beads, a party would be running more than half the time.
    - **Ball Party Time:** `BALL` slot drops double balls; disk pockets pay party values; yellow pays the progressive jackpot ("SUPER"). The jackpot can be won more than once per party ([T 02:03] "double super bonus in one party time").
    - **Ticket Party Time:** `TICKET` slot pays the top ladder value on every hit. [INF: effect; players call it the weaker party, [T 06:49]]
-6. **Pusher tray.** The pusher oscillates continuously. White balls pushed over the **front** edge return to the shot bank. [INF] Balls or pearls over a **side** edge are lost. [T 03:22]
+6. **Pusher tray.** The pusher oscillates continuously. White balls pushed over the **front** edge recycle into the machine with no payout. [INF; refunding shots made credits unnecessary] Balls or pearls over a **side** edge (the rail-free front corners) are lost. [T 03:22]
 7. **Pearls and the disk.** A pearl pushed over the front edge is routed to the spinning disk, settles into a colored pocket, and pays by color:
 
    | Pocket | Normal | Ball Party Time | Evidence |
@@ -56,7 +56,7 @@ video, real ticket dispensing, and real money.
 - Real-time 3D scene: cabinet frame, acrylic peg board, LCD panel (procedural canvas texture), tray, pusher, chute, disk.
 - The LCD mirrors rule state: both ladders, the active party with countdown, current pocket values, and the jackpot.
 - The HUD shows credits, shots, tickets won, and the jackpot. Buttons: insert credit, launch (hold to auto-fire), reset.
-- Input: pointer or touch over the scene aims; click or Space launches; ←/→ nudge aim.
+- Input: press anywhere on the cabinet, the LAUNCH button, or Space; holding auto-fires.
 - Targets: 60 fps on a recent laptop with ~300 simulated balls; layout usable at 390 px wide.
 
 ## 4. Delivery

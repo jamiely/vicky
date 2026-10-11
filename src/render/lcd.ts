@@ -74,9 +74,9 @@ export function paintLcd(ctx: CanvasRenderingContext2D, rules: GameRules): void 
   ctx.fillText('VALUES', cx, cy + 18);
 
   // Ladders: ball beads on the left, ticket values on the right.
-  const beadR = 34;
-  const ladderTop = 150;
-  const gap = 84;
+  const ladderTop = 125;
+  const gap = (LCD_SIZE.h - 80 - ladderTop) / (RULES.ladderSteps - 1);
+  const beadR = Math.min(34, gap * 0.42);
   for (let i = 0; i < RULES.ladderSteps; i++) {
     const y = ladderTop + (RULES.ladderSteps - 1 - i) * gap;
     for (const side of ['ball', 'ticket'] as const) {
@@ -90,7 +90,7 @@ export function paintLcd(ctx: CanvasRenderingContext2D, rules: GameRules): void 
       ctx.strokeStyle = side === 'ball' ? '#5ef0ff' : '#ff6ad5';
       ctx.stroke();
       ctx.fillStyle = lit ? '#120626' : '#d9c8ff';
-      ctx.font = '900 26px system-ui, sans-serif';
+      ctx.font = `900 ${Math.round(beadR * 0.8)}px system-ui, sans-serif`;
       ctx.fillText(side === 'ball' ? 'BALL' : String(RULES.ticketLadder[i]), x, y + 1);
     }
   }

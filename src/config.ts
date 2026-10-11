@@ -8,8 +8,14 @@ export const RULES = {
   shotsPerCredit: 10,
   jackpotBase: 1200,
   jackpotPerCredit: 1,
-  ladderSteps: 5,
-  ticketLadder: [15, 20, 25, 30, 40] as const,
+  // Ladder pace is tuned, not observed: 8 steps with knockback 2 at 2 shots/s yields ~15 Ball Parties/hour
+  // (~13% of play), close to the ~4 seen in the 14-minute source video. Shorter ladders keep a party running >50% of the time.
+  ladderSteps: 8,
+  ladderKnockback: 2,
+  /** Contains the contiguous run 15·20·25·?·40 visible on the source LCD. */
+  ticketLadder: [8, 10, 12, 15, 20, 25, 30, 40] as const,
+  /** "BIG BALL LUCKY" is a chance: a guaranteed pearl would flood the tray at ~2% of shots per pearl budget. */
+  luckyPearlChance: 0.15,
   ballsPerBallHit: 5,
   partySeconds: 31,
   pocketPay: {
@@ -79,5 +85,5 @@ export const DISK = {
 export const SIM = {
   step: 1 / 120,
   maxStepsPerFrame: 8,
-  autoFireInterval: 0.22,
+  autoFireInterval: 0.5,
 };

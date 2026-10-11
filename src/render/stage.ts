@@ -17,25 +17,22 @@ const DISK_ENTRY = new THREE.Vector3(
   DISK.center.z - DISK.grooveRadius * Math.sin(DISK.entryAngle),
 );
 /** Half extents (cm) the camera must keep in view around its target, for any aspect ratio. */
-const VIEW_HALF = { w: 70, h: 64 };
+const VIEW_HALF = { w: 70, h: 68 };
 
 /** three.js view of one station. Reads physics, disk, and rules state; never mutates them. */
 export class Stage {
   readonly renderer: THREE.WebGLRenderer;
-  readonly camera = new THREE.PerspectiveCamera(40, 1, 1, 2000);
+  readonly camera = new THREE.PerspectiveCamera(40, 1, 10, 2000);
   private readonly scene = new THREE.Scene();
-  private readonly cameraTarget = new THREE.Vector3(10, 38, -6);
+  private readonly cameraTarget = new THREE.Vector3(10, 33, -6);
   private readonly balls: THREE.InstancedMesh;
   private readonly pearls: THREE.InstancedMesh;
   private readonly pusher: THREE.Group;
   private readonly diskGroup = new THREE.Group();
-  private readonly aimMarker: THREE.Mesh;
   private readonly lcdCtx: CanvasRenderingContext2D;
   private readonly lcdTex: THREE.CanvasTexture;
   private lcdVersion = -1;
   private lcdSecond = -1;
-  private readonly raycaster = new THREE.Raycaster();
-  private readonly boardPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -BOARD.z);
   private readonly m = new THREE.Matrix4();
   private readonly p = new THREE.Vector3();
   private readonly q = new THREE.Quaternion();
@@ -106,14 +103,6 @@ export class Stage {
 
     this.buildDisk();
 
-    this.aimMarker = new THREE.Mesh(
-      new THREE.ConeGeometry(1.6, 4, 16),
-      new THREE.MeshStandardMaterial({ color: '#ffe066', emissive: '#ffd400', emissiveIntensity: 2 }),
-    );
-    this.aimMarker.rotation.x = Math.PI;
-    this.aimMarker.position.set(0, BOARD.top + 4, BOARD.z);
-    this.scene.add(this.aimMarker);
-
     this.resize();
   }
 
@@ -130,16 +119,7 @@ export class Stage {
     this.camera.updateProjectionMatrix();
   }
 
-  /** World x on the peg-board plane under a client point, or null if the ray misses it. */
-  aimFromPointer(clientX: number, clientY: number): number | null {
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
-    this.raycaster.setFromCamera(ndc, this.camera);
-    const hit = this.raycaster.ray.intersectPlane(this.boardPlane, this.p);
-    return hit ? hit.x : null;
-  }
-
-  sync(physics: PhysicsWorld, disk: PocketDisk, rules: GameRules, aimX: number): void {
+  sync(physics: PhysicsWorld, disk: PocketDisk, rules: GameRules): void {
     let balls = 0;
     let pearls = 0;
     for (const t of physics.bodies) {
@@ -171,7 +151,6 @@ export class Stage {
 
     this.pusher.position.z = physics.pusherFront - PUSHER.depth / 2;
     this.diskGroup.rotation.y = disk.angle;
-    this.aimMarker.position.x = aimX;
 
     const second = Math.floor(rules.now);
     const partyActive = rules.partyEnds.ball !== null || rules.partyEnds.ticket !== null;
@@ -367,27 +346,28 @@ export class Stage {
 
     const top = new THREE.Mesh(
       new THREE.CircleGeometry(DISK.radius, 64),
-      new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: '#ffffff', emissiveIntensity: 0.35, roughness: 0.3 }),
+      new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: '#ffffff', emissiveIntensity: 0.12, roughness: 0.55 }),
     );
     top.rotation.x = -Math.PI / 2;
     top.position.y = 1.01;
     top.receiveShadow = true;
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(DISK.radius, DISK.radius, 2, 64), new THREE.MeshStandardMaterial({ color: '#1b2030', metalness: 0.7, roughness: 0.4 }));
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(DISK.radius, DISK.radius, 1.8, 64), new THREE.MeshStandardMaterial({ color: '#1b2030', metalness: 0.7, roughness: 0.4 }));
+    base.position.y = -0.1; // top cap at 0.8, clear of the textured face at 1.01
     this.diskGroup.add(base, top);
     this.diskGroup.position.set(DISK.center.x, DISK.center.y, DISK.center.z);
     this.scene.add(this.diskGroup);
 
     const rim = new THREE.Mesh(
       new THREE.TorusGeometry(DISK.radius + 1, 1, 12, 64),
-      new THREE.MeshStandardMaterial({ color: '#41e8ff', emissive: '#41e8ff', emissiveIntensity: 1.8 }),
+      new THREE.MeshStandardMaterial({ color: '#41e8ff', emissive: '#41e8ff', emissiveIntensity: 0.8 }),
     );
     rim.rotation.x = Math.PI / 2;
     rim.position.set(DISK.center.x, DISK.center.y + 1.5, DISK.center.z);
     this.scene.add(rim);
 
     const chute = new THREE.Mesh(
-      new THREE.TubeGeometry(new THREE.LineCurve3(CHUTE_START, DISK_ENTRY), 1, PEARL_RADIUS + 0.8, 16, false),
-      new THREE.MeshStandardMaterial({ color: '#d9f6ff', transparent: true, opacity: 0.18, roughness: 0.05, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.TubeGeometry(new THREE.LineCurve3(CHUTE_START, DISK_ENTRY), 1, PEARL_RADIUS + 0.4, 16, false),
+      new THREE.MeshStandardMaterial({ color: '#d9f6ff', transparent: true, opacity: 0.1, roughness: 0.05, depthWrite: false, side: THREE.DoubleSide }),
     );
     this.scene.add(chute);
   }
