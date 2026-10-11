@@ -4,6 +4,8 @@ A 3D browser ball-pusher that recreates the gameplay, look, and sound of the *Vi
 three.js renders the cabinet with bloom, Rapier simulates every ball, and Web Audio synthesizes all sound.
 Branding, art, and audio are original; nothing is copied from the reference footage.
 
+**Play:** https://jamiely.github.io/vicky/ (deployed by `.github/workflows/deploy.yml` on every push to `main`).
+
 ## Run
 
 ```sh
