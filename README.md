@@ -72,7 +72,6 @@ npm run electron:start      # build and launch
 npm run electron:dev        # Vite hot reload inside Electron (port 5174)
 npm run electron:smoke      # real-window check; saves dist_electron/electron-smoke.png
 npm run build:electron:win  # Windows x64 portable + NSIS installer
-npm run build:electron:mac  # macOS dmg + zip (unsigned: right-click → Open the first time)
 ```
 
 `electron:smoke` checks:
