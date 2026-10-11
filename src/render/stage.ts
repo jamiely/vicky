@@ -132,10 +132,12 @@ export class Stage {
     this.q.identity();
     for (const dp of disk.pearls) {
       if (pearls >= MAX_PEARLS) break;
-      if (dp.chute > 0) {
-        this.p.lerpVectors(CHUTE_START, DISK_ENTRY, 1 - dp.chute / DISK.chuteSeconds);
+      if (dp.phase === 'chute') {
+        this.p.lerpVectors(CHUTE_START, DISK_ENTRY, dp.t / DISK.chuteSeconds);
+      } else if (dp.phase === 'lift') {
+        this.p.set(DISK.center.x, THREE.MathUtils.lerp(DISK.center.y - 6, 95, dp.t / DISK.liftSeconds), DISK.center.z);
       } else {
-        const sink = dp.pocket === null ? 0 : Math.min(dp.sunk * 10, PEARL_RADIUS * 1.3);
+        const sink = dp.phase === 'sunk' ? Math.min(dp.t * 10, PEARL_RADIUS * 1.3) : 0;
         this.p.set(
           DISK.center.x + DISK.grooveRadius * Math.cos(dp.angle),
           DISK.center.y + 1 + PEARL_RADIUS - sink,

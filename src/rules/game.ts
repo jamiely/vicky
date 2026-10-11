@@ -1,5 +1,4 @@
 import { RULES, SLOTS, type PocketColor } from '../config';
-import type { Rng } from '../rng';
 
 export type Side = 'ball' | 'ticket';
 export type Effect = { type: 'dropBalls'; count: number } | { type: 'dropPearl' };
@@ -23,10 +22,9 @@ export class GameRules {
   now = 0;
   /** Increments on every state change so views can skip redundant redraws. */
   version = 0;
+  /** Pearls waiting at the top of the tower; LUCKY releases one onto the tray. */
+  pearlReserve: number = RULES.pearlReserveStart;
   private notices: Notice[] = [];
-
-  /** `rng` decides chance outcomes (LUCKY pearl drops); tests inject a fixed source. */
-  constructor(private readonly rng: Pick<Rng, 'next'>) {}
 
   addCredits(count: number): void {
     this.credits += count;
@@ -80,11 +78,12 @@ export class GameRules {
         return [];
       }
       case 'lucky':
-        if (this.rng.next() >= RULES.luckyPearlChance) {
-          this.notices.push({ text: 'BIG BALL LUCKY: no pearl this time', tone: 'info' });
+        if (this.pearlReserve === 0) {
+          this.notices.push({ text: 'BIG BALL LUCKY: tower is empty', tone: 'info' });
           return [];
         }
-        this.notices.push({ text: 'BIG BALL LUCKY: pearl drop!', tone: 'win' });
+        this.pearlReserve--;
+        this.notices.push({ text: `BIG BALL LUCKY: pearl released (${this.pearlReserve} left in tower)`, tone: 'win' });
         return [{ type: 'dropPearl' }];
     }
   }
@@ -106,9 +105,15 @@ export class GameRules {
     return pay;
   }
 
-  /** A pearl fell off a tray side instead of reaching the disk. */
+  /** A pearl fell off a tray side instead of reaching the disk (it still rides the lift back). */
   notePearlLost(): void {
     this.notices.push({ text: 'Pearl lost down the side', tone: 'loss' });
+    this.version++;
+  }
+
+  /** A pearl reached the top of the tower lift. */
+  returnPearl(): void {
+    this.pearlReserve++;
     this.version++;
   }
 

@@ -3,6 +3,7 @@
 export type PocketColor = 'green' | 'red' | 'yellow';
 export type SlotKind = 'ball' | 'ticket' | 'lucky';
 
+/** Rule tunables. Mutable so the debug menu can change them live (rules read these on every call). */
 export const RULES = {
   startCredits: 10,
   shotsPerCredit: 10,
@@ -13,16 +14,19 @@ export const RULES = {
   ladderSteps: 8,
   ladderKnockback: 2,
   /** Contains the contiguous run 15·20·25·?·40 visible on the source LCD. */
-  ticketLadder: [8, 10, 12, 15, 20, 25, 30, 40] as const,
-  /** "BIG BALL LUCKY" is a chance: a guaranteed pearl would flood the tray at ~2% of shots per pearl budget. */
-  luckyPearlChance: 0.15,
+  ticketLadder: [8, 10, 12, 15, 20, 25, 30, 40],
+  /**
+   * Pearls are a fixed set that circulates (tray → disk → tower lift → reserve → LUCKY → tray), as on the source
+   * cabinet where pearls ride back up the clear tower ([F 04:41], [F 10:13]). Total in play = this + TRAY.initialPearls.
+   */
+  pearlReserveStart: 4,
   ballsPerBallHit: 5,
   partySeconds: 31,
   pocketPay: {
     normal: { green: 40, red: 60, yellow: 120 },
     party: { green: 180, red: 300 }, // yellow during Ball Party pays the progressive jackpot
   },
-} as const;
+};
 
 /** Left-to-right slot row under the peg board, as printed on the cabinet. */
 export const SLOTS: readonly SlotKind[] = ['ball', 'ticket', 'ball', 'lucky', 'ticket', 'ball', 'ticket'];
@@ -80,6 +84,8 @@ export const DISK = {
   creep: 0.35, // rad/s floor; must stay below captureSpeed so every pearl settles
   captureSpeed: 1.2,
   chuteSeconds: 0.9,
+  sinkSeconds: 1.2,
+  liftSeconds: 3.5,
 };
 
 export const SIM = {

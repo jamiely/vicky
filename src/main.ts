@@ -16,7 +16,7 @@ const viewport = document.querySelector<HTMLElement>('#viewport')!;
 const loading = document.querySelector<HTMLElement>('#loading')!;
 
 let physics = await PhysicsWorld.create(rng);
-let rules = new GameRules(rng);
+let rules = new GameRules();
 let disk = new PocketDisk(rng);
 const stage = new Stage(viewport, physics.pegs);
 const hud = new Hud();
@@ -51,10 +51,15 @@ function fixedStep(): void {
       }
     } else if (event.kind === 'pearl') {
       if (event.type === 'frontExit') disk.launch();
-      else rules.notePearlLost();
+      else {
+        rules.notePearlLost();
+        disk.sendToLift();
+      }
     }
   }
-  for (const pocket of disk.step(SIM.step)) rules.onPocket(pocket.color);
+  const { pockets, returned } = disk.step(SIM.step);
+  for (const pocket of pockets) rules.onPocket(pocket.color);
+  for (let i = 0; i < returned; i++) rules.returnPearl();
 }
 
 let last = performance.now();
@@ -102,7 +107,7 @@ document.querySelector('#reset')!.addEventListener('click', async () => {
   ready = false;
   physics.dispose();
   physics = await PhysicsWorld.create(rng);
-  rules = new GameRules(rng);
+  rules = new GameRules();
   disk = new PocketDisk(rng);
   simTime = 0;
   accumulator = 0;
