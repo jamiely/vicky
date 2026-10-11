@@ -12,13 +12,11 @@ import type { PhysicsWorld } from '../sim/physics';
 import type { DebugLightInfo, DebugLights } from '../ui/debugMenu';
 import { buildCabinet, JACKPOT_DIGITS, type Cabinet } from './cabinet';
 import { LCD_SIZE, paintLcd, type LcdFlash } from './lcd';
-import { DEFAULT_DISTANCE, VIEW } from './settings';
+import { VIEW, type CameraView, type Layout } from './settings';
 import { paintSevenSegment } from './textures';
 
 const MAX_BALLS = 600;
 const MAX_PEARLS = 48;
-/** Half width (cm) that must stay visible at the default distance; narrow screens scale the camera distance up. */
-const FIT_HALF_WIDTH = 72;
 const LCD_FPS = 20;
 
 interface RegisteredLight {
@@ -30,7 +28,9 @@ interface RegisteredLight {
 /** three.js view of one station. Reads physics, disk, and rules state; never mutates them. */
 export class Stage {
   readonly renderer: THREE.WebGLRenderer;
-  readonly camera = new THREE.PerspectiveCamera(VIEW.camera.fov, 1, 10, 3000);
+  readonly camera = new THREE.PerspectiveCamera(VIEW.cameras.landscape.fov, 1, 10, 3000);
+  /** Portrait viewports (vertical cabinet monitors, phones held upright) get the straight-on camera. */
+  layout: Layout = 'landscape';
   readonly orbit: OrbitControls;
   private readonly scene = new THREE.Scene();
   private readonly composer: EffectComposer;
@@ -114,6 +114,12 @@ export class Stage {
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
     this.camera.aspect = w / Math.max(1, h);
+    this.layout = h > w ? 'portrait' : 'landscape';
+  }
+
+  /** Camera settings for the current layout (the debug menu and zoom edit these). */
+  get view(): CameraView {
+    return VIEW.cameras[this.layout];
   }
 
   /** Shows a celebration overlay on the LCD (jackpot, party start, lucky pearl). */
@@ -188,12 +194,12 @@ export class Stage {
   }
 
   private applyView(): void {
-    const c = VIEW.camera;
-    this.orbit.enabled = c.orbit;
-    if (!c.orbit) {
-      // Narrow (portrait) screens scale the distance so the default view still fits the cabinet width; zoom still works.
-      const hHalf = Math.tan(THREE.MathUtils.degToRad(c.fov) / 2) * this.camera.aspect;
-      const distance = c.distance * Math.max(1, FIT_HALF_WIDTH / hHalf / DEFAULT_DISTANCE);
+    const c = this.view;
+    this.orbit.enabled = VIEW.orbit;
+    if (!VIEW.orbit) {
+      // Back off until the fit box shows on both screen axes, then apply zoom.
+      const vHalf = Math.tan(THREE.MathUtils.degToRad(c.fov) / 2);
+      const distance = c.zoom * Math.max(c.fitHalfHeight / vHalf, c.fitHalfWidth / (vHalf * this.camera.aspect));
       const pitch = THREE.MathUtils.degToRad(c.pitch);
       const yaw = THREE.MathUtils.degToRad(c.yaw);
       this.camera.position.set(

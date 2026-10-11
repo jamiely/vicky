@@ -8,7 +8,7 @@ const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /**
  * Exercises the packaged game in a real Electron window: WebGL renders the cabinet, assets stay local, a real
  * keyboard press launches balls through the physics board into slots, audio unlocks, LUCKY releases a tower pearl,
- * and a pearl pushed off the tray reaches the disk.
+ * and a pearl pushed off the tray reaches the disk. A tall window switches to the portrait (vertical cabinet) layout.
  */
 export function prepareSmoke(win, projectRoot) {
   const failures = [];
@@ -102,8 +102,14 @@ export function prepareSmoke(win, projectRoot) {
 
     await pause(500);
     const file = await screenshot("electron-smoke.png");
+
+    // A portrait window (vertical cabinet monitor) switches to the straight-on layout.
+    win.setContentSize(405, 720);
+    await waitFor(() => evaluate("document.querySelector('#app').dataset.layout === 'portrait'"), "portrait layout on a tall window");
+    await pause(500);
+    const portrait = await screenshot("electron-smoke-portrait.png");
     assert.deepEqual(failures, [], "Renderer/resource failures");
-    console.log(`[electron-smoke] passed: WebGL, local assets, keyboard launch, slot hit, audio unlock, LUCKY release, disk routing; screenshot=${file}`);
+    console.log(`[electron-smoke] passed: WebGL, local assets, keyboard launch, slot hit, audio unlock, LUCKY release, disk routing, portrait layout; screenshots=${file}, ${portrait}`);
     app.quit();
   };
 }

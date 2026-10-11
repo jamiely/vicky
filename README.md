@@ -4,7 +4,9 @@ A 3D browser ball-pusher that recreates the gameplay, look, and sound of the *Vi
 three.js renders the cabinet with bloom, Rapier simulates every ball, and Web Audio synthesizes all sound.
 Branding, art, and audio are original; nothing is copied from the reference footage.
 
-![Ball Party: balls rain from the peg board while the pusher feeds pearls toward the pocket disk](docs/media/gameplay.gif)
+| Desktop (angled view) | Vertical cabinet monitor (straight on) |
+| --- | --- |
+| <img src="docs/media/gameplay.gif" alt="Ball Party: balls rain from the peg board while the pusher feeds pearls toward the pocket disk" width="600"> | <img src="docs/media/portrait.webp" alt="Portrait layout: the whole cabinet seen straight on, counters above and buttons below" width="240"> |
 
 **Play:** https://jamiely.github.io/vicky/ (deployed by `.github/workflows/deploy.yml` on every push to `main`).
 
@@ -32,13 +34,14 @@ Opening the repository's root `index.html` directly does not work. It is the Vit
 - Pearls pushed off the front roll along the gutter, down the chute onto the spinning disk, and pay by pocket color. Pearls that fall off the sides pay nothing.
 - **Where new pearls come from:** pearls are a fixed set that circulates. After paying (or falling off a side), each pearl rides the lift up the tower and hangs in the stack under its cap. LUCKY releases the bottom pearl down the tower and out of the tube onto the tray.
 - **Zoom:** mouse wheel, trackpad pinch, two-finger pinch on touch screens, or the `+` / `-` keys. For free camera orbit, use the debug menu.
+- **Vertical screens:** when the window is taller than it is wide (a portrait arcade monitor, or a phone held upright), the camera looks at the cabinet straight on. The counters move to the top band and the event feed and buttons to the bottom. Turning the screen back to landscape restores the angled view; each layout keeps its own zoom.
 - **SOUND ON/OFF** toggles audio (remembered). Audio starts on your first click or key press.
 
 ## Debug menu
 
 Open with `?debug=1`, then press backquote (`` ` ``) or the DEBUG button to toggle it. It is modeled on the debug panel in `../fast-drop`.
 
-- **Camera:** distance, pitch, yaw, target, FOV, and free mouse orbit.
+- **Camera** (for whichever layout is showing): zoom, pitch, yaw, target, FOV, fit box, and free mouse orbit.
 - **Render:** exposure, bloom, shadows, reflections, LED speed and brightness.
 - **Simulation:** time scale, pause, auto-fire rate, pusher period, disk spin and decay.
 - **Rules:** ladder length and knockback, balls per hit, party length, payouts.
@@ -73,7 +76,7 @@ The desktop app is an offline game, modeled on the `../stack` repo's Electron se
 ```sh
 npm run electron:start      # build and launch
 npm run electron:dev        # Vite hot reload inside Electron (port 5174)
-npm run electron:smoke      # real-window check; saves dist_electron/electron-smoke.png
+npm run electron:smoke      # real-window check; saves dist_electron/electron-smoke.png and electron-smoke-portrait.png
 npm run build:electron:win  # Windows x64 portable + NSIS installer
 ```
 
@@ -83,9 +86,10 @@ npm run build:electron:win  # Windows x64 portable + NSIS installer
 - A real Space key press launches balls into a slot, and audio unlocks.
 - LUCKY releases a pearl onto the tray.
 - A pearl pushed off the tray reaches the disk.
+- A tall window switches to the portrait layout.
 
 `.github/workflows/release-electron.yml` builds, smoke-tests, and packages the Windows app on every push and pull request. Every push to `main` refreshes the rolling `latest` prerelease; a `v*` tag publishes a versioned release.
-For LaunchBox, point it at the `portable.exe`.
+For LaunchBox, point it at the `portable.exe`. On a cabinet whose Windows display is set to portrait, the fullscreen window is tall, so the game uses the straight-on vertical layout with no extra flags.
 
 ### Vermilion cabinet controls
 

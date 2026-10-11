@@ -14,55 +14,61 @@
 html, body { height: 100%; margin: 0; overflow: hidden; background: #05070d; color: var(--ink); }
 button { font: inherit; }
 
-#app { position: fixed; inset: 0; }
+/* HUD sizes are in em so the portrait layout can scale the whole overlay from #app's font size. */
+#app { position: fixed; inset: 0; font-size: 16px; }
 #viewport { position: absolute; inset: 0; }
 #viewport canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
 
 .hud-top {
   position: absolute; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px;
-  display: flex; flex-wrap: wrap; gap: 8px; pointer-events: none;
+  display: flex; flex-wrap: wrap; gap: 0.5em; pointer-events: none;
 }
 .stat {
-  min-width: 96px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px;
+  min-width: 6em; padding: 0.5em 0.75em; border: 1px solid var(--border); border-radius: 0.625em;
   background: var(--panel); backdrop-filter: blur(6px);
 }
-.stat span { display: block; color: var(--muted); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
-.stat strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.stat span { display: block; color: var(--muted); font-size: 0.68em; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.stat strong { font-size: 1.35em; font-variant-numeric: tabular-nums; }
 .stat.jackpot strong { color: var(--gold); }
 .stat.party { align-self: center; color: #120626; background: var(--gold); font-weight: 900; letter-spacing: 0.08em; }
 
 .feed {
-  position: absolute; top: 84px; right: 12px; width: min(320px, calc(100% - 24px));
-  margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; pointer-events: none;
+  position: absolute; top: 84px; right: 12px; width: min(20em, calc(100% - 24px));
+  margin: 0; padding: 0; list-style: none; display: grid; gap: 0.375em; pointer-events: none;
 }
 .feed li {
-  padding: 8px 12px; border-radius: 8px; background: var(--panel); border-left: 4px solid var(--cyan);
-  font-size: 0.9rem; font-weight: 700; animation: slide 0.25s ease-out;
+  padding: 0.55em 0.85em; border-radius: 0.5em; background: var(--panel); border-left: 4px solid var(--cyan);
+  font-size: 0.9em; font-weight: 700; animation: slide 0.25s ease-out;
 }
 .feed .tone-party { border-color: var(--pink); color: var(--pink); }
-.feed .tone-jackpot { border-color: var(--gold); color: var(--gold); font-size: 1.05rem; }
+.feed .tone-jackpot { border-color: var(--gold); color: var(--gold); font-size: 1.05em; }
 .feed .tone-loss { border-color: #ff7598; color: #ffb3c4; }
 @keyframes slide { from { opacity: 0; transform: translateX(16px); } }
 
 .hud-bottom {
   position: absolute; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom));
-  display: flex; justify-content: center; gap: 10px;
+  display: flex; justify-content: center; gap: 0.625em;
 }
 .hud-bottom button {
-  min-height: 48px; padding: 0 18px; border: 1px solid var(--border); border-radius: 10px;
+  min-height: 3em; padding: 0 1.125em; border: 1px solid var(--border); border-radius: 0.625em;
   color: var(--cyan); background: var(--panel); font-weight: 800; letter-spacing: 0.08em; cursor: pointer;
   touch-action: none; user-select: none; -webkit-user-select: none;
 }
 .hud-bottom button:hover { background: rgba(94, 238, 255, 0.12); }
-.hud-bottom .launch { min-width: 200px; color: #07131c; background: linear-gradient(180deg, #9dffff, #43d8ec); border: 0; }
-.hud-bottom .launch small { display: block; font-size: 0.62rem; letter-spacing: 0.1em; opacity: 0.75; }
+.hud-bottom .launch { min-width: 12.5em; color: #07131c; background: linear-gradient(180deg, #9dffff, #43d8ec); border: 0; }
+.hud-bottom .launch small { display: block; font-size: 0.62em; letter-spacing: 0.1em; opacity: 0.75; }
 .hud-bottom .launch:active { transform: translateY(1px); }
 
 .loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); letter-spacing: 0.2em; }
 
-@media (max-width: 560px) {
-  .stat { min-width: 0; flex: 1 1 calc(25% - 8px); padding: 6px 8px; }
-  .stat strong { font-size: 1.05rem; }
-  .feed { top: auto; bottom: 76px; }
-  .hud-bottom .launch { min-width: 0; flex: 1; }
-}
+/*
+ * Portrait (vertical cabinet monitors, upright phones; `data-layout` is set by Game from the viewport shape). The
+ * straight-on cabinet is width-bound, leaving bands above and below it: counters fill the top band, the event feed and
+ * buttons the bottom one, all scaled with the screen width.
+ */
+#app[data-layout='portrait'] { font-size: clamp(13px, 2.6vw, 30px); }
+#app[data-layout='portrait'] .stat { flex: 1 1 calc(25% - 0.5em); min-width: 0; }
+#app[data-layout='portrait'] .stat.party { flex-basis: 100%; text-align: center; }
+#app[data-layout='portrait'] .feed { top: auto; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 3.75em); left: 12px; right: 12px; width: auto; }
+#app[data-layout='portrait'] .hud-bottom button { flex: 1; min-width: 0; padding: 0 0.5em; }
+#app[data-layout='portrait'] .feed li:nth-child(n + 4) { display: none; }

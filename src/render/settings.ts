@@ -1,27 +1,39 @@
-/** Landscape camera distance (cm); zoom range around it. */
-export const DEFAULT_DISTANCE = 300;
-export const ZOOM_RANGE = { min: 90, max: 520 };
+/** Screen layout, picked from the viewport shape: portrait (taller than wide) is the vertical-cabinet view. */
+export type Layout = 'landscape' | 'portrait';
+
+/** One layout's camera framing. Angles in degrees, positions in cm. */
+export interface CameraView {
+  /** Multiplies the fitted distance (< 1 is closer). Wheel, pinch, and +/− change it within `ZOOM_RANGE`. */
+  zoom: number;
+  /** Elevation above the target. */
+  pitch: number;
+  /** Rotation around the target (positive = camera moves right). */
+  yaw: number;
+  targetX: number;
+  targetY: number;
+  targetZ: number;
+  /** Vertical field of view. */
+  fov: number;
+  /** Half extents around the target that the unzoomed view always shows; the tighter screen axis sets the distance. */
+  fitHalfWidth: number;
+  fitHalfHeight: number;
+}
+
+export const ZOOM_RANGE = { min: 0.3, max: 1.75 };
 
 /**
- * Live-tunable view settings (camera, post-processing, LEDs). The stage reads these every frame, so the debug menu
+ * Live-tunable view settings (cameras, post-processing, LEDs). The stage reads these every frame, so the debug menu
  * can change them without rebuilding anything.
  */
 export const VIEW = {
-  camera: {
-    /** Distance from the target (cm). Narrow screens scale it up so the cabinet width still fits. Zoom changes it. */
-    distance: DEFAULT_DISTANCE,
-    /** Elevation above the target, degrees. */
-    pitch: 17,
-    /** Rotation around the target, degrees (positive = camera moves right). */
-    yaw: 7,
-    targetX: 16,
-    targetY: 46,
-    targetZ: -4,
-    /** Vertical field of view on landscape screens, degrees. */
-    fov: 36,
-    /** Free orbit with the mouse (debug); disables press-to-launch on the canvas. */
-    orbit: false,
-  },
+  cameras: {
+    /** Desktop/phone-landscape: an angled three-quarter view from the player's left. */
+    landscape: { zoom: 1, pitch: 17, yaw: 7, targetX: 16, targetY: 46, targetZ: -4, fov: 36, fitHalfWidth: 72, fitHalfHeight: 97.5 },
+    /** Vertical arcade monitor: the whole cabinet straight on, from the topper sign down to the deck and pocket disk. */
+    portrait: { zoom: 1, pitch: 10, yaw: 0, targetX: 12, targetY: 34, targetZ: -4, fov: 30, fitHalfWidth: 70, fitHalfHeight: 90 },
+  } satisfies Record<Layout, CameraView>,
+  /** Free orbit with the mouse (debug); disables press-to-launch on the canvas. */
+  orbit: false,
   render: {
     exposure: 1.05,
     bloom: true,

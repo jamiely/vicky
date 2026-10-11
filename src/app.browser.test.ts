@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { CREDIT_BATCH, debugControls, Game } from './app';
@@ -27,7 +28,8 @@ afterEach(() => {
   for (const g of games.splice(0)) g.dispose();
   document.body.innerHTML = '';
   localStorage.removeItem('vicky.muted');
-  Object.assign(VIEW.camera, viewDefaults.camera);
+  for (const layout of ['landscape', 'portrait'] as const) Object.assign(VIEW.cameras[layout], viewDefaults.cameras[layout]);
+  VIEW.orbit = viewDefaults.orbit;
   Object.assign(VIEW.render, viewDefaults.render);
   vi.restoreAllMocks();
 });
@@ -51,19 +53,43 @@ describe('Game boot and rendering', () => {
     expect(game.stage.renderer.shadowMap.enabled).toBe(false);
   });
 
-  it('backs the camera off on portrait screens so the cabinet width still fits', async () => {
-    const wide = await boot({ width: 1280, height: 800 });
-    wide.game.frame(1 / 60);
-    const narrow = await boot({ width: 390, height: 844 });
-    narrow.game.stage.resize();
-    narrow.game.frame(1 / 60);
-    const dist = (g: Game): number => g.stage.camera.position.distanceTo(g.stage.orbit.target);
-    expect(dist(narrow.game)).toBeGreaterThan(dist(wide.game) * 1.5);
+  it('frames the whole cabinet on wide, tall, and phone screens, switching to the portrait layout on tall ones', async () => {
+    // Cabinet extremes: back-panel left edge, topper sign, deck front, pocket-disk bowl, tower top.
+    const extremes = [
+      new THREE.Vector3(-50, 52, -44),
+      new THREE.Vector3(30, 130, -46),
+      new THREE.Vector3(0, -8, 38),
+      new THREE.Vector3(DISK.center.x + DISK.radius, DISK.center.y, DISK.center.z),
+      new THREE.Vector3(TOWER.x + TOWER.radiusTop, TOWER.baseY + TOWER.height, TOWER.z),
+    ];
+    for (const [width, height, layout] of [[1280, 800, 'landscape'], [1080, 1920, 'portrait'], [390, 844, 'portrait']] as const) {
+      const { game, root } = await boot({ width, height });
+      game.frame(1 / 60);
+      expect(game.stage.layout).toBe(layout);
+      expect(root.dataset.layout).toBe(layout); // the HUD's CSS keys off this
+      game.stage.camera.updateMatrixWorld();
+      for (const p of extremes) {
+        const ndc = p.clone().project(game.stage.camera);
+        expect(Math.max(Math.abs(ndc.x), Math.abs(ndc.y)), `${width}×${height} (${p.toArray()})`).toBeLessThan(1);
+      }
+    }
+  });
+
+  it('follows window resizes between layouts, keeping each layout’s own zoom', async () => {
+    const { game, root } = await boot({ width: 540, height: 960 });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '+' }));
+    expect(VIEW.cameras.portrait.zoom).toBeLessThan(viewDefaults.cameras.portrait.zoom);
+    root.style.width = '1280px';
+    root.style.height = '800px';
+    window.dispatchEvent(new Event('resize'));
+    expect(game.stage.layout).toBe('landscape');
+    expect(root.dataset.layout).toBe('landscape');
+    expect(VIEW.cameras.landscape.zoom).toBe(viewDefaults.cameras.landscape.zoom);
   });
 
   it('hands the camera to orbit controls in orbit mode and stops canvas presses from firing', async () => {
     const { game } = await boot();
-    VIEW.camera.orbit = true;
+    VIEW.orbit = true;
     game.frame(1 / 60);
     expect(game.stage.orbit.enabled).toBe(true);
     // Real pointer (Playwright): OrbitControls captures the pointer, which synthetic events cannot provide.
@@ -98,6 +124,8 @@ describe('zoom', () => {
     game.stage.renderer.domElement.dispatchEvent(new WheelEvent('wheel', { deltaY, ctrlKey, bubbles: true, cancelable: true }));
   const touch = (game: Game, type: string, pointerId: number, clientX: number): boolean =>
     game.stage.renderer.domElement.dispatchEvent(new PointerEvent(type, { pointerId, clientX, clientY: 300, bubbles: true }));
+  const zoom0 = viewDefaults.cameras.landscape.zoom;
+  const view = VIEW.cameras.landscape;
 
   it('the mouse wheel zooms in and out within limits, and moves the camera', async () => {
     const { game } = await boot();
@@ -105,30 +133,30 @@ describe('zoom', () => {
     const far = game.stage.camera.position.distanceTo(game.stage.orbit.target);
     expect(wheel(game, -300)).toBe(false); // handled: page does not scroll
     game.frame(0);
-    expect(VIEW.camera.distance).toBeLessThan(viewDefaults.camera.distance);
+    expect(view.zoom).toBeLessThan(zoom0);
     expect(game.stage.camera.position.distanceTo(game.stage.orbit.target)).toBeLessThan(far);
     for (let i = 0; i < 50; i++) wheel(game, -300);
-    expect(VIEW.camera.distance).toBe(ZOOM_RANGE.min);
+    expect(view.zoom).toBe(ZOOM_RANGE.min);
     for (let i = 0; i < 50; i++) wheel(game, 300);
-    expect(VIEW.camera.distance).toBe(ZOOM_RANGE.max);
+    expect(view.zoom).toBe(ZOOM_RANGE.max);
   });
 
   it('a trackpad pinch (ctrl+wheel) zooms faster than a wheel notch', async () => {
     const { game } = await boot();
     wheel(game, -20);
-    const notch = viewDefaults.camera.distance - VIEW.camera.distance;
-    VIEW.camera.distance = viewDefaults.camera.distance;
+    const notch = zoom0 - view.zoom;
+    view.zoom = zoom0;
     wheel(game, -20, true);
-    expect(viewDefaults.camera.distance - VIEW.camera.distance).toBeGreaterThan(notch * 3);
+    expect(zoom0 - view.zoom).toBeGreaterThan(notch * 3);
   });
 
   it('+ and − keys zoom in and out', async () => {
     const { game } = await boot();
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '+' }));
-    expect(VIEW.camera.distance).toBeCloseTo(viewDefaults.camera.distance / 1.15);
+    expect(view.zoom).toBeCloseTo(zoom0 / 1.15);
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '-' }));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '-' }));
-    expect(VIEW.camera.distance).toBeCloseTo(viewDefaults.camera.distance * 1.15);
+    expect(view.zoom).toBeCloseTo(zoom0 * 1.15);
     expect(game.firing).toBe(false);
   });
 
@@ -139,19 +167,19 @@ describe('zoom', () => {
     touch(game, 'pointerdown', 2, 200);
     expect(game.firing).toBe(false);
     touch(game, 'pointermove', 2, 300); // spread 100 → 200: zoom in 2×
-    expect(VIEW.camera.distance).toBeCloseTo(viewDefaults.camera.distance / 2);
+    expect(view.zoom).toBeCloseTo(zoom0 / 2);
     touch(game, 'pointermove', 9, 50); // unknown pointer: ignored
     touch(game, 'pointerup', 2, 300);
     touch(game, 'pointermove', 1, 400); // one finger left: no zoom
-    expect(VIEW.camera.distance).toBeCloseTo(viewDefaults.camera.distance / 2);
+    expect(view.zoom).toBeCloseTo(zoom0 / 2);
     touch(game, 'pointerup', 1, 400);
   });
 
   it('leaves the wheel to orbit controls in orbit mode', async () => {
     const { game } = await boot();
-    VIEW.camera.orbit = true;
+    VIEW.orbit = true;
     wheel(game, -300);
-    expect(VIEW.camera.distance).toBe(viewDefaults.camera.distance);
+    expect(view.zoom).toBe(zoom0);
   });
 });
 

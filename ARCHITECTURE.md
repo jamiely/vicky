@@ -38,7 +38,7 @@ flowchart LR
 | `src/render/stage.ts` | Renderer, camera rig, bloom, environment map, lights, instanced balls and pearls, LED animation, LCD repaint | mutate game state |
 | `src/render/cabinet.ts` | Static cabinet geometry and materials | — |
 | `src/render/textures.ts`, `lcd.ts` | Procedural canvas art (panel, logo, slot windows, signs, disk face, 7-segment display, LCD) | — |
-| `src/render/settings.ts` | Live view tunables (`VIEW`): camera, render, LEDs | — |
+| `src/render/settings.ts` | Live view tunables (`VIEW`): one camera per layout, render, LEDs | — |
 | `src/audio/sound.ts` | `SoundEngine`: synthesis, mix, music sequencer | — |
 | `src/ui/hud.ts`, `debugMenu.ts` | DOM overlay and the data-driven debug panel | — |
 | `src/main.ts` | Reads the URL and boots `Game` into `#app` | — |
@@ -118,9 +118,11 @@ The cabinet is modeled on reference frames from the videos in `media/`: layout, 
   - A cached galaxy backdrop sits behind a value wheel showing the live pocket pays (SUPER plus the jackpot during Ball Party).
   - The wheel's hub shows LUCKY BALL with the tower count; curved ladders follow its rim; party banners carry countdowns.
   - Flash overlays mark jackpot, party, and lucky events.
-- **Camera:** an orbit rig (distance, pitch, yaw, target) from `VIEW`.
-  - On narrow screens the distance is scaled up so the cabinet width fits.
-  - Zoom changes the distance: wheel, ctrl+wheel (trackpad pinch), two-finger touch pinch, or `+`/`-`, clamped to `ZOOM_RANGE`.
+- **Camera:** an orbit rig (pitch, yaw, target, FOV, zoom) from `VIEW.cameras[layout]`.
+  - The layout follows the viewport shape. Landscape uses an angled three-quarter view; portrait (taller than wide, e.g. a vertical cabinet monitor) looks at the cabinet straight on.
+  - `Game` mirrors the layout onto `#app[data-layout]`, and the HUD CSS restacks around the cabinet in portrait.
+  - The distance fits each layout's box (`fitHalfWidth` × `fitHalfHeight` around the target) on the tighter screen axis, then multiplies by zoom.
+  - Zoom is per layout: wheel, ctrl+wheel (trackpad pinch), two-finger touch pinch, or `+`/`-`, clamped to `ZOOM_RANGE`.
   - Free orbit is a debug option.
 
 ## Sound
@@ -143,7 +145,7 @@ The cabinet is modeled on reference frames from the videos in `media/`: layout, 
 - **unit (Node):** rules, the pocket disk (pearl conservation), and physics (board drain, exits, impacts, drops, stall rescue).
 - **browser (headless Chromium):**
   - `Game` flows: input, launching, slots, the pearl path, parties, the jackpot, buttons, mute persistence, the debug wiring, and the main entry.
-  - Stage view settings and portrait camera fit.
+  - Stage view settings, the layout switch, and the whole cabinet staying on screen in each layout.
   - The LCD's content per state, and seven-segment pixels.
   - The HUD.
   - The debug panel DOM: params, presets, the light editor, keys.

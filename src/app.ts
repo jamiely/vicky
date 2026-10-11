@@ -2,7 +2,7 @@ import './style.css';
 import { SoundEngine } from './audio/sound';
 import { BOARD, DISK, PUSHER, RULES, SIM, SLOTS, TOWER, TRAY, type PocketColor, type SlotKind } from './config';
 import { Stage } from './render/stage';
-import { VIEW, ZOOM_RANGE } from './render/settings';
+import { VIEW, ZOOM_RANGE, type CameraView } from './render/settings';
 import { Rng } from './rng';
 import { GameRules, type Side } from './rules/game';
 import { PocketDisk } from './sim/disk';
@@ -82,7 +82,7 @@ export class Game {
     return game;
   }
 
-  private constructor(root: HTMLElement, rng: Rng, physics: PhysicsWorld) {
+  private constructor(private readonly root: HTMLElement, rng: Rng, physics: PhysicsWorld) {
     this.rng = rng;
     this.physics = physics;
     this.disk = new PocketDisk(rng);
@@ -246,9 +246,10 @@ export class Game {
     this.hud.push({ text: 'Machine reset', tone: 'info' });
   }
 
-  /** Multiplies the camera distance by `factor` (< 1 zooms in), kept within the zoom range. */
+  /** Multiplies the current layout's zoom by `factor` (< 1 zooms in), kept within the zoom range. */
   zoom(factor: number): void {
-    VIEW.camera.distance = Math.min(ZOOM_RANGE.max, Math.max(ZOOM_RANGE.min, VIEW.camera.distance * factor));
+    const view = this.stage.view;
+    view.zoom = Math.min(ZOOM_RANGE.max, Math.max(ZOOM_RANGE.min, view.zoom * factor));
   }
 
   setMuted(muted: boolean): void {
@@ -289,7 +290,7 @@ export class Game {
       if (pointers.size >= 2) {
         this.firing = false; // a second finger means a pinch, not a launch
         pinchSpread = spread();
-      } else if (!VIEW.camera.orbit) this.firing = true;
+      } else if (!VIEW.orbit) this.firing = true;
     });
     listen(canvas, 'pointermove', (e) => {
       if (!pointers.has(e.pointerId)) return;
@@ -309,7 +310,7 @@ export class Game {
       listen(this.hud.launch, type, () => (this.firing = false));
     }
     listen(canvas, 'wheel', (e) => {
-      if (VIEW.camera.orbit) return; // orbit controls zoom themselves
+      if (VIEW.orbit) return; // orbit controls zoom themselves
       e.preventDefault();
       this.zoom(Math.exp(e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
     });
@@ -332,7 +333,13 @@ export class Game {
       if (e.code === 'Space') this.firing = false;
     });
     listen(window, 'blur', () => (this.firing = false));
-    listen(window, 'resize', () => this.stage.resize());
+    // The layout (portrait = vertical cabinet) follows the viewport shape; the HUD restyles via `data-layout`.
+    const resize = (): void => {
+      this.stage.resize();
+      this.root.dataset.layout = this.stage.layout;
+    };
+    resize();
+    listen(window, 'resize', resize);
 
     listen(this.hud.credit, 'click', () => this.addCredits(CREDIT_BATCH));
     listen(this.hud.reset, 'click', () => void this.reset());
@@ -355,21 +362,33 @@ function toggle<T, K extends BooleanKeys<T>>(obj: T, key: K, label: string): Deb
 /** Debug menu wiring: live tunables, rebuild-on-reset tunables, cheats, and stats. */
 export function debugControls(game: Game): DebugControls {
   const slot = (kind: SlotKind): number => SLOTS.indexOf(kind);
-  const c = VIEW.camera;
+  // Camera rows edit whichever layout is showing (resize the window to tune the other one).
+  const cam = (key: NumberKeys<CameraView>, label: string, min: number, max: number, step: number): DebugNumber => ({
+    kind: 'number',
+    key,
+    label,
+    min,
+    max,
+    step,
+    get: () => game.stage.view[key],
+    set: (v) => (game.stage.view[key] = v),
+  });
   const r = VIEW.render;
   return {
     groups: [
       {
-        title: 'Camera',
+        title: 'Camera (current layout)',
         params: [
-          num(c, 'distance', 'Distance', 60, 400, 1),
-          num(c, 'pitch', 'Pitch °', -10, 80, 0.5),
-          num(c, 'yaw', 'Yaw °', -80, 80, 0.5),
-          num(c, 'targetX', 'Target X', -60, 80, 0.5),
-          num(c, 'targetY', 'Target Y', -20, 120, 0.5),
-          num(c, 'targetZ', 'Target Z', -60, 40, 0.5),
-          num(c, 'fov', 'FOV °', 15, 90, 1),
-          toggle(c, 'orbit', 'Free orbit (mouse)'),
+          cam('zoom', 'Zoom ×', ZOOM_RANGE.min, ZOOM_RANGE.max, 0.01),
+          cam('pitch', 'Pitch °', -10, 80, 0.5),
+          cam('yaw', 'Yaw °', -80, 80, 0.5),
+          cam('targetX', 'Target X', -60, 80, 0.5),
+          cam('targetY', 'Target Y', -20, 120, 0.5),
+          cam('targetZ', 'Target Z', -60, 40, 0.5),
+          cam('fov', 'FOV °', 15, 90, 1),
+          cam('fitHalfWidth', 'Fit half width', 20, 160, 1),
+          cam('fitHalfHeight', 'Fit half height', 20, 200, 1),
+          toggle(VIEW, 'orbit', 'Free orbit (mouse)'),
         ],
       },
       {
