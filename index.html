@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#08131f" />
+    <title>Neon Reef Pusher</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="cabinet" aria-labelledby="game-title">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">ARCADE REDEMPTION LAB</p>
+          <h1 id="game-title">NEON REEF <span>PUSHER</span></h1>
+        </div>
+        <div class="credit-box" aria-label="Credits">
+          <span class="label">CREDITS</span>
+          <strong id="credits">20</strong>
+        </div>
+      </header>
+
+      <section class="status-row" aria-label="Game status">
+        <div class="status-card">
+          <span>Tickets</span>
+          <strong id="tickets">0</strong>
+        </div>
+        <div class="status-card jackpot-card">
+          <span>Jackpot</span>
+          <strong id="jackpot">1,200</strong>
+        </div>
+        <div class="status-card">
+          <span>Combo</span>
+          <strong id="combo">x1</strong>
+        </div>
+        <button id="add-credit" class="utility-button" type="button">+ CREDIT</button>
+      </section>
+
+      <section class="game-wrap">
+        <div class="machine" id="machine">
+          <div class="machine-lighting" aria-hidden="true"></div>
+          <div class="screen-panel">
+            <div class="screen-heading">
+              <span>DROP ZONE</span>
+              <span id="mode-label">READY</span>
+            </div>
+            <div class="drop-track" id="drop-track">
+              <div class="drop-marker" id="drop-marker" aria-hidden="true"></div>
+              <span class="drop-arrow">▼</span>
+            </div>
+            <canvas id="game-canvas" width="900" height="820" aria-label="Neon Reef Pusher playfield"></canvas>
+          </div>
+          <div class="control-deck">
+            <div class="deck-readout">
+              <span>DROP VALUE</span>
+              <strong>1</strong>
+            </div>
+            <button id="drop-button" class="drop-button" type="button">DROP COIN</button>
+            <div class="deck-readout right">
+              <span>PUSHER</span>
+              <strong id="pusher-direction">→</strong>
+            </div>
+          </div>
+        </div>
+
+        <aside class="side-panel">
+          <section class="wheel-card" aria-labelledby="wheel-title">
+            <div class="section-kicker">BONUS WHEEL</div>
+            <h2 id="wheel-title">Catch the reef glow</h2>
+            <div class="wheel" id="wheel" aria-label="Bonus wheel">
+              <div class="wheel-segment segment-a">60</div>
+              <div class="wheel-segment segment-b">120</div>
+              <div class="wheel-segment segment-c">PARTY</div>
+              <div class="wheel-segment segment-d">JACKPOT</div>
+              <div class="wheel-hub">GO</div>
+            </div>
+            <p id="event-message" class="event-message" role="status">Drop coins onto the shelf.</p>
+          </section>
+
+          <section class="help-card" aria-labelledby="how-title">
+            <div class="section-kicker">HOW TO PLAY</div>
+            <h2 id="how-title">Build the edge</h2>
+            <ol>
+              <li>Move the drop marker with your pointer or touch.</li>
+              <li>Drop coins to nudge the shelf toward the collection edge.</li>
+              <li>Orange orbs trigger the wheel; party mode doubles orb rewards.</li>
+            </ol>
+          </section>
+
+          <button id="reset-button" class="reset-button" type="button">RESET RUN</button>
+        </aside>
+      </section>
+
+      <footer class="footer-note">
+        <span>Skill game · no real-money wagering</span>
+        <span id="fps-readout">60 FPS TARGET</span>
+      </footer>
+    </main>
+    <script type="module" src="game.js"></script>
+  </body>
+</html>
