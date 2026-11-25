@@ -1,7 +1,8 @@
-import { app, BrowserWindow, protocol } from "electron";
+import { app, BrowserWindow, protocol, screen } from "electron";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { windowLayout } from "./window.mjs";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const distRoot = path.join(projectRoot, "dist");
@@ -64,11 +65,11 @@ function serveAssets() {
 }
 
 async function createWindow() {
+  const layout = windowLayout(screen.getPrimaryDisplay(), process.argv);
   const win = new BrowserWindow({
     title: "Neon Reef — Pearl Pusher",
-    width: 1440,
-    height: 900,
-    fullscreen: !smoke,
+    ...(smoke ? { width: 1440, height: 900 } : layout.bounds),
+    fullscreen: !smoke && layout.fullscreen,
     autoHideMenuBar: true,
     backgroundColor: "#05070d",
     show: false,
@@ -109,6 +110,7 @@ async function createWindow() {
   if (smokeRun) {
     await smokeRun();
   } else {
+    if (!layout.fullscreen) win.maximize();
     win.show();
   }
 }

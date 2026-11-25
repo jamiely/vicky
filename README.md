@@ -71,7 +71,8 @@ The desktop app is an offline game, modeled on the `../stack` repo's Electron se
 
 - It serves the built game from `dist/` over a private `vicky://app` protocol.
 - The renderer is sandboxed, with no Node integration and no remote navigation.
-- It opens fullscreen: `Escape` quits and `F11` toggles fullscreen.
+- It opens maximized, filling the display it starts on, portrait or landscape. Launch it with `--fullscreen` to start fullscreen.
+- `F11` toggles fullscreen and `Escape` quits.
 
 ```sh
 npm run electron:start      # build and launch
@@ -89,7 +90,7 @@ npm run build:electron:win  # Windows x64 portable + NSIS installer
 - A tall window switches to the portrait layout.
 
 `.github/workflows/release-electron.yml` builds, smoke-tests, and packages the Windows app on every push and pull request. Every push to `main` refreshes the rolling `latest` prerelease; a `v*` tag publishes a versioned release.
-For LaunchBox, point it at the `portable.exe`. On a cabinet whose Windows display is set to portrait, the fullscreen window is tall, so the game uses the straight-on vertical layout with no extra flags.
+For LaunchBox, point it at the `portable.exe` and pass `--fullscreen` as its command-line argument. On a cabinet whose Windows display is set to portrait, the window is tall, so the game uses the straight-on vertical layout.
 
 ### Vermilion cabinet controls
 
