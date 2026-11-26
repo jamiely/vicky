@@ -48,7 +48,9 @@ button { font: inherit; }
 .overlay {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2;
   width: min(26em, calc(100% - 24px)); padding: 1.6em 1.4em; text-align: center;
-  border: 1px solid var(--border); border-radius: 1em; background: rgba(6, 10, 22, 0.86); backdrop-filter: blur(8px);
+  border: 1px solid var(--border); border-radius: 1em; background: rgba(6, 10, 22, 0.9);
+  /* No backdrop-filter: blurring the live WebGL canvas behind the pulsing button broke shader validation in
+     Electron on software GL (Windows CI); each alone passed. The card is near-opaque anyway. */
   box-shadow: 0 0 60px rgba(94, 238, 255, 0.18); pointer-events: none;
 }
 .overlay .eyebrow { color: var(--muted); font-size: 0.75em; font-weight: 800; letter-spacing: 0.24em; }
