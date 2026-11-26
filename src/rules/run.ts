@@ -68,17 +68,26 @@ export class Run {
    * true once nothing is left to pay (no pearl in the chute or rolling on the disk).
    */
   tick(now: number, boardBalls: number, settled: boolean, score: number): void {
-    this.now = now;
-    if ((this.phase === 'playing' || this.phase === 'suddenDeath') && now - this.started >= RUN.lastCallSeconds) {
-      this.enter('lastCall');
-    }
+    this.deadlines(now);
     const empty = this.stock === 0 && boardBalls === 0;
     if (this.phase === 'playing' && empty) this.enter('suddenDeath');
-    else if (this.phase === 'suddenDeath' && now - this.since >= RUN.suddenDeathSeconds) this.enter('sweep');
     else if (this.phase === 'lastCall' && empty) this.enter('sweep');
     else if (this.phase === 'sweep' && now - this.since >= RUN.sweepSeconds && (settled || now - this.since >= RUN.sweepMaxSeconds)) {
       this.finalScore = score;
       this.enter('over');
+    }
+  }
+
+  /**
+   * Applies the clock's deadlines (Last Call, the end of sudden death) at `now`. Call before a step's tray exits are
+   * counted, so a ball that falls after a deadline never refills or revives.
+   */
+  deadlines(now: number): void {
+    this.now = now;
+    if ((this.phase === 'playing' || this.phase === 'suddenDeath') && now - this.started >= RUN.lastCallSeconds) {
+      this.enter(this.phase === 'suddenDeath' ? 'sweep' : 'lastCall');
+    } else if (this.phase === 'suddenDeath' && now - this.since >= RUN.suddenDeathSeconds) {
+      this.enter('sweep');
     }
   }
 

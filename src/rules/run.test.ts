@@ -98,6 +98,21 @@ describe('free-play run', () => {
     expect(run.phase).toBe('sweep');
   });
 
+  it('deadlines apply before the step’s refills: no refill after Last Call, no revive after sudden death expires', () => {
+    const run = started();
+    run.deadlines(RUN.lastCallSeconds);
+    const stock = run.stock;
+    run.ballOut();
+    expect({ phase: run.phase, stock: run.stock }).toEqual({ phase: 'lastCall', stock });
+
+    const broke = started(0);
+    broke.stock = 0;
+    broke.tick(10, 0, true, 0);
+    broke.deadlines(10 + RUN.suddenDeathSeconds);
+    broke.ballOut();
+    expect({ phase: broke.phase, stock: broke.stock }).toEqual({ phase: 'sweep', stock: 0 });
+  });
+
   it('callLast forces Last Call only while playing', () => {
     const run = new Run();
     run.callLast();

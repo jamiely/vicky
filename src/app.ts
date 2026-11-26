@@ -76,6 +76,8 @@ export class Game {
   /** When the PLAY AGAIN offer opened (simulated time); null when not offered. */
   private offerOpened: number | null = null;
   private readonly button = new ButtonLatch();
+  /** Inputs holding the main button down: Space and pointers are tracked apart so one can't release the other. */
+  private readonly holders = new Set<'key' | 'pointer'>();
   private savedJackpot = 0;
   readonly stage: Stage;
   readonly hud: Hud;
@@ -178,6 +180,7 @@ export class Game {
     const parties = { ...this.rules.partyEnds };
     this.simTime += SIM.step;
     this.rules.tick(this.simTime);
+    this.run.deadlines(this.simTime); // before this step's exits: nothing refills past a deadline
 
     this.fireCooldown -= SIM.step;
     if (this.firing && this.fireCooldown <= 0 && this.run.fire()) {
@@ -284,7 +287,8 @@ export class Game {
   }
 
   /** The main button (Space, the cabinet, LAUNCH): fires during a run; otherwise starts one or enters initials. */
-  press(repeat = false): void {
+  press(repeat = false, source: 'key' | 'pointer' = 'key'): void {
+    this.holders.add(source);
     if (!this.button.down(repeat)) return;
     this.attract.input(this.simTime);
     if (this.initials) {
@@ -295,7 +299,11 @@ export class Game {
     this.firing = this.run.active;
   }
 
-  release(): void {
+  /** Releases one input's hold (or all, on blur); the button lifts when nothing holds it. */
+  release(source?: 'key' | 'pointer'): void {
+    if (source) this.holders.delete(source);
+    else this.holders.clear();
+    if (this.holders.size > 0 || !this.button.held) return;
     this.initials?.up(this.simTime);
     this.button.up();
     this.firing = false;
@@ -355,6 +363,7 @@ export class Game {
     this.offerOpened = null;
     this.disk = new PocketDisk(this.rng);
     this.simTime = 0;
+    this.attract.input(0); // its idle clock follows the rewound simulation time
     this.accumulator = 0;
     this.firing = false;
     this.paused = wasPaused;
@@ -403,9 +412,9 @@ export class Game {
     listen(canvas, 'pointerdown', (e) => {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pointers.size >= 2) {
-        this.release(); // a second finger means a pinch, not a launch
+        this.release('pointer'); // a second finger means a pinch, not a launch
         pinchSpread = spread();
-      } else if (!VIEW.orbit) this.press();
+      } else if (!VIEW.orbit) this.press(false, 'pointer');
     });
     listen(canvas, 'pointermove', (e) => {
       if (!pointers.has(e.pointerId)) return;
@@ -420,16 +429,16 @@ export class Game {
       listen(canvas, type, (e) => {
         pointers.delete(e.pointerId);
         if (pointers.size < 2) pinchSpread = 0;
-        this.release();
+        this.release('pointer');
       });
-      listen(this.hud.launch, type, () => this.release());
+      listen(this.hud.launch, type, () => this.release('pointer'));
     }
     listen(canvas, 'wheel', (e) => {
       if (VIEW.orbit) return; // orbit controls zoom themselves
       e.preventDefault();
       this.zoom(Math.exp(e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
     });
-    listen(this.hud.launch, 'pointerdown', () => this.press());
+    listen(this.hud.launch, 'pointerdown', () => this.press(false, 'pointer'));
     listen(window, 'keydown', (e) => {
       if (e.key === '+' || e.key === '=') this.zoom(1 / 1.15);
       else if (e.key === '-' || e.key === '_') this.zoom(1.15);
@@ -441,7 +450,7 @@ export class Game {
       this.press(e.repeat);
     });
     listen(window, 'keyup', (e) => {
-      if (e.code === 'Space') this.release();
+      if (e.code === 'Space') this.release('key');
     });
     listen(window, 'blur', () => this.release());
     // The layout (portrait = vertical cabinet) follows the viewport shape; the HUD restyles via `data-layout`.

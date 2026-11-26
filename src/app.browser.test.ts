@@ -353,6 +353,33 @@ describe('free-play run', () => {
     key('keyup', 'Space');
   });
 
+  it('a pointer leaving the cabinet does not release a held Space (initials hold still locks)', async () => {
+    const { game } = await boot();
+    game.startRun();
+    game.run.stock = 0;
+    game.run.callLast();
+    let n = 0;
+    while (game.run.active && n++ < 4000) game.step();
+    game.rules.tickets = 0;
+    expect(game.initials === null || game.initials.index === 0).toBe(true);
+    game.initials = new (await import('./rules/arcade')).InitialsEntry(game.simTime);
+    key('keydown', 'Space');
+    pointer(game.stage.renderer.domElement, 'pointerleave');
+    steps(game, 0.7);
+    key('keyup', 'Space');
+    expect({ index: game.initials!.index, text: game.initials!.text }).toEqual({ index: 1, text: 'AAA' });
+  });
+
+  it('reset restarts the attract idle clock with the simulation', async () => {
+    const { game } = await boot();
+    steps(game, 31);
+    expect(game.attract.page).toBe('title');
+    await game.reset();
+    expect(game.attract.page).toBeNull();
+    steps(game, 30.05);
+    expect(game.attract.page).toBe('title');
+  });
+
   it('persists the jackpot and restores it on the next boot', async () => {
     const { game } = await boot();
     game.rules.jackpot = 1777;
