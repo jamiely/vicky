@@ -23,8 +23,10 @@ Opening the repository's root `index.html` directly does not work. It is the Vit
 
 ## Play
 
+- **Free play, one run at a time.** Press to start with **80 balls**. Each shot costs a ball; every white ball the pusher shoves off the front edge comes back. Go broke and you get 6 s of **sudden death**: a ball off the front saves you.
+- **Last Call** at 4:00: no more refills; shoot out what's left. The pusher then sweeps the tray, pearls on the disk pay, and the run is over.
+- **High scores:** a top-10 score takes three initials with the one button (tap: next letter, hold: lock). A press within 10 s plays again from 0. After 30 s idle, the cabinet cycles title, machine, scores, and how to play.
 - **Hold** LAUNCH, Space, or the cabinet itself to fire balls into the peg board (2/s). Shots cannot be aimed.
-- **Credits:** press `C` or click **+5 CREDITS** to add five credits. Holding `C` adds only one batch, not one per key repeat.
 - Balls land in `BALL · TICKET · BALL · BIG BALL LUCKY · TICKET · BALL · TICKET`.
   - **BALL** drops white balls onto the pusher tray and climbs the ball ladder.
   - **TICKET** pays the ticket-ladder value and climbs the ticket ladder.
@@ -45,8 +47,9 @@ Open with `?debug=1`, then press backquote (`` ` ``) or the DEBUG button to togg
 - **Render:** exposure, bloom, shadows, reflections, LED speed and brightness.
 - **Simulation:** time scale, pause, auto-fire rate, pusher period, disk spin and decay.
 - **Rules:** ladder length and knockback, balls per hit, party length, payouts.
-- **Machine (on reset):** starting balls, pearls, credits, and jackpot.
-- **Cheats:** step, force a BALL/TICKET/LUCKY slot, drop balls or a pearl, start either party, send a pearl to the yellow pocket, reset.
+- **Run:** starting balls, cap, Last Call time, sudden-death window.
+- **Machine (on reset):** starting tray balls, pearls, and jackpot.
+- **Cheats:** step, start a run, +20 balls, empty the stock, call Last Call now, force a BALL/TICKET/LUCKY slot, drop balls or a pearl, start either party, send a pearl to the yellow pocket, reset.
 - **Lighting editor:** pick a light; toggle it, change its color, intensity, and position, or add point and spot lights.
 - **Presets:** save and load settings (localStorage); copy the current values as JSON.
 
@@ -101,7 +104,7 @@ Both connected controllers use the same two physical button numbers as the exist
 | Button | JoyToKey key | Action |
 | --- | --- | --- |
 | 7 | Space | Hold to fire; release to stop |
-| 5 | C | Add five credits; hold for 1.5 seconds to exit |
+| 5 | C | Hold for 1.5 seconds to exit (free play: a tap does nothing) |
 
 LaunchBox's before-launch additional application runs `C:\arcade\Neon Reef\JoyToKey_NeonReef.ahk`, which loads `Documents\JoyToKey\NeonReef.cfg`. The hold-to-exit shortcut is scoped to the game's window. The hook stops JoyToKey and releases its mapped keys when the game exits, so its bindings do not remain active in LaunchBox. Other games' profiles are unchanged.
 

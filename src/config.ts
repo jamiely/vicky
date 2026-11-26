@@ -5,10 +5,9 @@ export type SlotKind = 'ball' | 'ticket' | 'lucky';
 
 /** Rule tunables. Mutable so the debug menu can change them live (rules read these on every call). */
 export const RULES = {
-  startCredits: 10,
-  shotsPerCredit: 10,
   jackpotBase: 1200,
-  jackpotPerCredit: 1,
+  /** The jackpot grows by one every this many shots (the source counter rose ~20 in a few minutes of play). */
+  jackpotShots: 10,
   // Ladder pace is tuned, not observed: 8 steps with knockback 2 at 2 shots/s yields ~15 Ball Parties/hour
   // (~13% of play), close to the ~4 seen in the 14-minute source video. Shorter ladders keep a party running >50% of the time.
   ladderSteps: 8,
@@ -20,7 +19,9 @@ export const RULES = {
    * cabinet where pearls ride back up the clear tower ([F 04:41], [F 10:13]). Total in play = this + TRAY.initialPearls.
    */
   pearlReserveStart: 4,
-  ballsPerBallHit: 5,
+  // Each BALL hit is ~0.39 balls pushed off per dropped ball (measured, 4 seeds × 10 min). At 2 per hit a shot returns
+  // ~0.8 balls: a slow drain that Ball Parties (double balls, ~1.6) push back up. At 3 no run went broke; at 5 never.
+  ballsPerBallHit: 2,
   partySeconds: 31,
   pocketPay: {
     normal: { green: 40, red: 60, yellow: 120 },
@@ -29,6 +30,27 @@ export const RULES = {
 };
 
 /** Left-to-right slot row under the peg board, as printed on the cabinet. */
+/**
+ * Free-play run: a bankroll of balls. Measured with the real physics (8 seeds): runs last 2:10–4:50, median ~3:50;
+ * 5 of 8 reached Last Call, the rest went broke earlier. A start of 60 gave a ~2:30 median.
+ */
+export const RUN = {
+  startStock: 80,
+  stockCap: 99,
+  /** Front-edge refills stop here; shoot out what's left. */
+  lastCallSeconds: 240,
+  /** Out of balls with the board empty: tray spills in this window revive the run. */
+  suddenDeathSeconds: 6,
+  /** Final push after the last ball: at least this long, then until pearls on the disk have paid (capped). */
+  sweepSeconds: 4,
+  sweepMaxSeconds: 15,
+  /** Pusher stroke rate during the sweep. */
+  sweepPusherSpeed: 2.5,
+  /** A press is ignored this long after a run ends, so a held launch doesn't skip the result. */
+  overLockSeconds: 1.5,
+  lowStock: 10,
+};
+
 export const SLOTS: readonly SlotKind[] = ['ball', 'ticket', 'ball', 'lucky', 'ticket', 'ball', 'ticket'];
 
 export const BALL_RADIUS = 2.0; // 40 mm ping-pong ball

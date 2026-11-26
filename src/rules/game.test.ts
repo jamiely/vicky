@@ -7,25 +7,30 @@ const TICKET = SLOTS.indexOf('ticket');
 const LUCKY = SLOTS.indexOf('lucky');
 const K = RULES.ladderKnockback;
 
-describe('credits and shots', () => {
-  it('converts one credit into a shot batch only when the bank is empty, growing the jackpot', () => {
+describe('shots and runs', () => {
+  it('grows the jackpot by one every jackpotShots shots', () => {
     const g = new GameRules();
-    expect(g.tryLaunch()).toBe(true);
-    expect(g.credits).toBe(RULES.startCredits - 1);
-    expect(g.shots).toBe(RULES.shotsPerCredit - 1);
-    expect(g.jackpot).toBe(RULES.jackpotBase + RULES.jackpotPerCredit);
-    for (let i = 1; i < RULES.shotsPerCredit; i++) g.tryLaunch();
-    expect(g.credits).toBe(RULES.startCredits - 1);
-    expect(g.shots).toBe(0);
+    for (let i = 0; i < RULES.jackpotShots - 1; i++) g.onShot();
+    expect(g.jackpot).toBe(RULES.jackpotBase);
+    g.onShot();
+    expect(g.shots).toBe(RULES.jackpotShots);
+    expect(g.jackpot).toBe(RULES.jackpotBase + 1);
   });
 
-  it('refuses to launch with no shots and no credits', () => {
+  it('a new run clears score, shots and ladders but keeps the jackpot and tower', () => {
     const g = new GameRules();
-    g.credits = 0;
-    expect(g.tryLaunch()).toBe(false);
-    g.addCredits(1);
-    expect(g.tryLaunch()).toBe(true);
-    expect(g.shots).toBe(RULES.shotsPerCredit - 1);
+    g.jackpot = 1500;
+    g.onSlot(TICKET);
+    g.onSlot(LUCKY);
+    g.onShot();
+    g.newRun();
+    expect({ tickets: g.tickets, shots: g.shots, ladder: g.ladder, jackpot: g.jackpot, tower: g.pearlReserve }).toEqual({
+      tickets: 0,
+      shots: 0,
+      ladder: { ball: 0, ticket: 0 },
+      jackpot: 1500,
+      tower: RULES.pearlReserveStart - 1,
+    });
   });
 });
 
@@ -115,10 +120,8 @@ describe('pearl pockets', () => {
 
   it('pays the progressive jackpot on yellow during Ball Party and can pay it twice in one party', () => {
     const g = new GameRules();
-    g.tryLaunch();
-    g.shots = 0;
-    g.tryLaunch();
-    const grown = RULES.jackpotBase + 2 * RULES.jackpotPerCredit;
+    for (let i = 0; i < 2 * RULES.jackpotShots; i++) g.onShot();
+    const grown = RULES.jackpotBase + 2;
     expect(g.jackpot).toBe(grown);
     for (let i = 0; i < RULES.ladderSteps; i++) g.onSlot(BALL);
     expect(g.onPocket('red')).toBe(RULES.pocketPay.party.red);

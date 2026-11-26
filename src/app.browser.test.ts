@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
-import { CREDIT_BATCH, debugControls, Game } from './app';
-import { DISK, RULES, SIM, SLOTS, TOWER, TRAY } from './config';
+import { debugControls, Game, JACKPOT_KEY, PLAY_AGAIN_SECONDS, SCORES_KEY } from './app';
+import { DISK, RULES, RUN, SIM, SLOTS, TOWER, TRAY } from './config';
 import { VIEW, ZOOM_RANGE } from './render/settings';
 
 const games: Game[] = [];
@@ -27,7 +27,7 @@ const feed = (root: HTMLElement): string[] => [...root.querySelectorAll('.feed l
 afterEach(() => {
   for (const g of games.splice(0)) g.dispose();
   document.body.innerHTML = '';
-  localStorage.removeItem('vicky.muted');
+  for (const k of ['vicky.muted', SCORES_KEY, JACKPOT_KEY]) localStorage.removeItem(k);
   for (const layout of ['landscape', 'portrait'] as const) Object.assign(VIEW.cameras[layout], viewDefaults.cameras[layout]);
   VIEW.orbit = viewDefaults.orbit;
   Object.assign(VIEW.render, viewDefaults.render);
@@ -37,10 +37,12 @@ afterEach(() => {
 describe('Game boot and rendering', () => {
   it('builds the cabinet canvas and HUD and keeps the HUD in sync with the rules', async () => {
     const { game, root } = await boot();
-    game.rules.addCredits(3);
+    game.rules.tickets = 4321;
+    game.startRun();
+    game.rules.tickets = 4321;
     game.frame(1 / 60);
     expect(root.querySelector('#viewport canvas')).not.toBeNull();
-    expect(root.querySelector('.hud-top strong')!.textContent).toBe(String(RULES.startCredits + 3));
+    expect([...root.querySelectorAll('.hud-top strong')].map((s) => s.textContent)).toEqual([String(RUN.startStock), '4:00', '4,321', '0', '1,200']);
   });
 
   it('applies view settings live: exposure, shadows, bloom, environment', async () => {
@@ -201,33 +203,27 @@ describe('time control', () => {
 });
 
 describe('launching', () => {
-  it('adds one credit batch per C press, not per held-key repeat', async () => {
+  it('the first Space press starts a run and keeps firing while held; C (credit) does nothing in free play', async () => {
     const { game } = await boot();
     key('keydown', 'KeyC');
-    for (let i = 0; i < 4; i++) {
-      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyC', key: 'c', repeat: true }));
-    }
-    expect(game.rules.credits).toBe(RULES.startCredits + CREDIT_BATCH);
-    expect(game.firing).toBe(false);
-    key('keyup', 'KeyC');
-    key('keydown', 'KeyC');
-    expect(game.rules.credits).toBe(RULES.startCredits + 2 * CREDIT_BATCH);
-  });
-
-  it('holding Space fires at the auto-fire rate and releasing stops', async () => {
-    const { game } = await boot();
+    expect(game.run.phase).toBe('ready');
     const launch = vi.spyOn(game.sound, 'launch');
+    const coin = vi.spyOn(game.sound, 'credit');
     key('keydown', 'Space');
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ', repeat: true }));
+    expect(game.run.phase).toBe('playing');
+    expect(coin).toHaveBeenCalledTimes(1);
     steps(game, SIM.autoFireInterval * 2 + 0.05);
     key('keyup', 'Space');
     steps(game, 1);
     expect(launch).toHaveBeenCalledTimes(3);
-    expect(game.rules.credits).toBe(RULES.startCredits - 1);
-    expect(game.rules.shots).toBe(RULES.shotsPerCredit - 3);
+    expect(game.rules.shots).toBe(3);
+    expect(game.run.stock).toBeLessThanOrEqual(RUN.startStock - 3 + 1); // a spill may have refunded one
   });
 
   it('pressing the cabinet or the LAUNCH button fires; release, leaving, or losing focus stops', async () => {
     const { game } = await boot();
+    game.startRun();
     pointer(game.stage.renderer.domElement, 'pointerdown');
     expect(game.firing).toBe(true);
     pointer(game.stage.renderer.domElement, 'pointerleave');
@@ -240,17 +236,19 @@ describe('launching', () => {
     expect(game.firing).toBe(false);
   });
 
-  it('stops firing and tells the player when credits run out', async () => {
-    const { game, root } = await boot();
-    game.rules.credits = 0;
+  it('does not fire without balls', async () => {
+    const { game } = await boot();
+    game.startRun();
+    game.run.stock = 0;
+    const launch = vi.spyOn(game.sound, 'launch');
     game.firing = true;
-    game.step();
-    expect(game.firing).toBe(false);
-    expect(feed(root)[0]).toBe(`Out of credits: press +${CREDIT_BATCH} CREDITS`);
+    steps(game, 1);
+    expect(launch).not.toHaveBeenCalled();
   });
 
   it('shots fall through the pegs with peg-click sounds and resolve in slots', async () => {
     const { game } = await boot();
+    game.startRun();
     const impact = vi.spyOn(game.sound, 'impact');
     const slot = vi.spyOn(game.sound, 'slot');
     game.firing = true;
@@ -259,7 +257,114 @@ describe('launching', () => {
     steps(game, 3);
     expect(impact.mock.calls.some(([kind]) => kind === 'peg')).toBe(true);
     expect(impact.mock.calls.every(([, intensity, pan]) => intensity > 0 && intensity <= 1 && Math.abs(pan) <= 1)).toBe(true);
-    expect(slot).toHaveBeenCalledTimes(RULES.shotsPerCredit - game.rules.shots);
+    expect(slot).toHaveBeenCalledTimes(game.rules.shots);
+  });
+});
+
+describe('free-play run', () => {
+  it('white balls pushed off the front refill the stock; pearls do not', async () => {
+    const { game } = await boot();
+    game.startRun();
+    game.run.stock = 10;
+    const balls = game.physics.bodies.filter((b) => b.kind === 'ball' && !b.inBoard).slice(0, 3);
+    for (const b of balls) b.body.setTranslation({ x: 0, y: -10, z: TRAY.front + 3 }, true);
+    const pearl = game.physics.bodies.find((b) => b.kind === 'pearl')!;
+    pearl.body.setTranslation({ x: 0, y: -10, z: TRAY.front + 3 }, true);
+    game.step();
+    expect(game.run.stock).toBe(13);
+  });
+
+  it('runs out: sudden death, sweep, game over → initials → high score saved → play again at 0', async () => {
+    const { game, root } = await boot();
+    const cues = vi.spyOn(game.sound, 'run');
+    game.startRun();
+    game.rules.tickets = 2500;
+    game.run.stock = 0;
+    game.step();
+    expect(game.run.phase).toBe('suddenDeath');
+    game.frame(0);
+    expect(root.querySelector('.stat.banner')!.textContent).toMatch(/^SUDDEN DEATH/);
+    // Hold the tray still so nothing revives the run.
+    game.physics.pusherSpeed = 0;
+    let n = 0;
+    while (game.run.phase === 'suddenDeath' && n++ < 2000) game.step();
+    expect(game.run.phase).toBe('sweep');
+    expect(game.physics.pusherSpeed).toBe(RUN.sweepPusherSpeed);
+    game.physics.pusherSpeed = 0;
+    n = 0;
+    while (game.run.active && n++ < 4000) {
+      game.step();
+      if (game.physics.pusherSpeed !== 1) game.physics.pusherSpeed = 0;
+    }
+    expect(game.run.phase).toBe('over');
+    expect(cues.mock.calls.map(([c]) => c)).toEqual(['suddenDeath', 'over']);
+    const score = game.run.finalScore;
+    expect(score).toBeGreaterThanOrEqual(2500);
+    expect(game.initials).not.toBeNull();
+    expect(game.physics.pusherSpeed).toBe(1);
+
+    // Initials: tap twice (C), hold to lock, then lock the rest.
+    for (let i = 0; i < 2; i++) {
+      key('keydown', 'Space');
+      key('keyup', 'Space');
+    }
+    key('keydown', 'Space');
+    steps(game, 0.7);
+    key('keyup', 'Space');
+    for (let i = 0; i < 2; i++) {
+      key('keydown', 'Space');
+      steps(game, 0.7);
+      key('keyup', 'Space');
+    }
+    game.step();
+    expect(game.initials).toBeNull();
+    expect(game.scores).toEqual([{ initials: 'CAA', score }]);
+    expect(JSON.parse(localStorage.getItem(SCORES_KEY)!)).toEqual([{ initials: 'CAA', score }]);
+    expect(game.continueSeconds).toBe(PLAY_AGAIN_SECONDS);
+    game.frame(0);
+    expect(root.querySelector('.overlay')!.textContent).toContain('#1 on this cabinet');
+
+    // Play again: a fresh run at 0 on the same machine.
+    const jackpot = game.rules.jackpot;
+    key('keydown', 'Space');
+    expect(game.run.phase).toBe('playing');
+    expect({ score: game.rules.tickets, stock: game.run.stock, jackpot: game.rules.jackpot }).toEqual({ score: 0, stock: RUN.startStock, jackpot });
+    key('keyup', 'Space');
+  });
+
+  it('a score below the table skips initials; the offer expires and attract begins after 30 s idle', async () => {
+    const { game } = await boot();
+    game.scores = Array.from({ length: 10 }, () => ({ initials: 'AAA', score: 1e6 }));
+    game.startRun();
+    game.run.callLast();
+    game.run.stock = 0;
+    let n = 0;
+    while (game.run.active && n++ < 4000) game.step();
+    expect(game.run.phase).toBe('over');
+    expect(game.initials).toBeNull();
+    expect(game.continueSeconds).toBe(PLAY_AGAIN_SECONDS);
+    steps(game, PLAY_AGAIN_SECONDS + 0.05);
+    expect(game.continueSeconds).toBeNull();
+    steps(game, 30);
+    expect(game.attract.page).toBe('title');
+    key('keydown', 'Space'); // the press wakes the cabinet and starts a run
+    expect(game.attract.page).toBeNull();
+    expect(game.run.phase).toBe('playing');
+    key('keyup', 'Space');
+  });
+
+  it('persists the jackpot and restores it on the next boot', async () => {
+    const { game } = await boot();
+    game.rules.jackpot = 1777;
+    game.frame(0);
+    expect(localStorage.getItem(JACKPOT_KEY)).toBe('1777');
+    const next = await boot();
+    expect(next.game.rules.jackpot).toBe(1777);
+    await next.game.reset();
+    expect(next.game.rules.jackpot).toBe(1777);
+    localStorage.setItem(SCORES_KEY, 'not json');
+    const third = await boot();
+    expect(third.game.scores).toEqual([]);
   });
 });
 
@@ -373,17 +478,15 @@ describe('slots, pearls, and parties', () => {
 });
 
 describe('player buttons', () => {
-  it('+CREDITS adds a batch with a coin sound; RESET rebuilds the machine', async () => {
+  it('RESET rebuilds the machine and ends the run', async () => {
     const { game, root } = await boot();
-    const credit = vi.spyOn(game.sound, 'credit');
-    game.hud.credit.click();
-    expect(game.rules.credits).toBe(RULES.startCredits + CREDIT_BATCH);
-    expect(credit).toHaveBeenCalled();
+    game.startRun();
     const oldPhysics = game.physics;
     game.rules.tickets = 500;
     await game.reset();
     expect(game.physics).not.toBe(oldPhysics);
     expect(game.rules.tickets).toBe(0);
+    expect(game.run.phase).toBe('ready');
     expect(game.simTime).toBe(0);
     game.frame(0);
     expect(feed(root)[0]).toBe('Machine reset');
@@ -442,8 +545,14 @@ describe('debug menu wiring', () => {
     run('Pause / resume');
     run('Step');
     expect(game.simTime).toBeCloseTo(SIM.step);
-    run('+5 credits');
-    expect(game.rules.credits).toBe(RULES.startCredits + CREDIT_BATCH);
+    run('Start run');
+    expect(game.run.phase).toBe('playing');
+    run('Empty stock');
+    expect(game.run.stock).toBe(0);
+    run('+20 balls');
+    expect(game.run.stock).toBe(20);
+    run('Last Call now');
+    expect(game.run.phase).toBe('lastCall');
     run('Force TICKET');
     expect(game.rules.tickets).toBe(RULES.ticketLadder[0]);
     run('Force BALL');

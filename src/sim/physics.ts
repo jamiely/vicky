@@ -40,6 +40,8 @@ export class PhysicsWorld {
   readonly bodies: Tracked[] = [];
   readonly pegs: { x: number; y: number }[] = [];
   pusherFront: number = PUSHER.frontMin;
+  /** Pusher stroke rate multiplier: the end-of-run sweep runs it faster to clear the tray. */
+  pusherSpeed = 1;
   private readonly pusher: RAPIER.RigidBody;
   private readonly dropQueue: BodyKind[] = [];
   private dropCooldown = 0;
@@ -112,7 +114,7 @@ export class PhysicsWorld {
 
   /** Advances one fixed step and reports slot hits and tray exits. */
   step(): SimEvent[] {
-    this.time += SIM.step;
+    this.time += SIM.step * this.pusherSpeed;
     const phase = 0.5 - 0.5 * Math.cos((2 * Math.PI * this.time) / PUSHER.period);
     this.pusherFront = PUSHER.frontMin + (PUSHER.frontMax - PUSHER.frontMin) * phase;
     this.pusher.setNextKinematicTranslation({ x: 0, y: PUSHER.height / 2, z: this.pusherFront - PUSHER.depth / 2 });

@@ -10,7 +10,10 @@
 
 ```mermaid
 flowchart LR
-  Input[pointer / Space / C / HUD buttons] -->|firing, credit, reset, mute| Game[app.ts Game]
+  Input[pointer / Space / HUD buttons] -->|press/release, reset, mute| Game[app.ts Game]
+  Game -->|fire / ballOut / tick| Run[rules/run — pure]
+  Run -->|RunEvent[]: lastCall, suddenDeath, revive, sweep, over| Game
+  Game -->|initials, table, attract| Arcade[rules/arcade — pure]
   Game -->|tryLaunch / onSlot / onPocket / tick / returnPearl| Rules[rules/game — pure]
   Rules -->|Effect[]: dropBalls, dropPearl| Game
   Game -->|spawnShot / queueDrop| Physics[sim/physics — Rapier]
@@ -30,11 +33,13 @@ flowchart LR
 |--------|------|----------|
 | `src/config.ts` | Every rule and geometry tunable: geometry (cm), payouts, ladder values, durations. Mutable, so the debug menu can change values live | — |
 | `src/rng.ts` | Seeded PRNG (mulberry32) | — |
-| `src/rules/game.ts` | Credits, shots, tickets, ladders, parties, jackpot, payouts, tower pearl reserve; returns `Effect[]` | import three, Rapier, or audio; read wall-clock time |
+| `src/rules/game.ts` | Shots, tickets (the score), ladders, parties, jackpot, payouts, tower pearl reserve; returns `Effect[]` | import three, Rapier, or audio; read wall-clock time |
+| `src/rules/run.ts` | The free-play run: ball stock, refills, sudden death, Last Call, final push, final score; returns `RunEvent[]` | same as `game.ts` |
+| `src/rules/arcade.ts` | One-button initials, the top-10 table, the attract cycle (ported from `../glowfall`) | touch storage or the DOM |
 | `src/sim/physics.ts` | Rapier world: peg board, slots, tray, rails, pusher, scraper; ball bodies; exits; impact detection; stall recovery | know payouts |
 | `src/sim/pearlPath.ts` | Geometry of the pearl's trip outside the tray (gutter, chute, groove, lift, tower stack, release tube), shared by the disk sim and the stage | — |
 | `src/sim/disk.ts` | Pearl phases after the tray: chute → disk groove → pocket → lift → tower stack; release → tray | know payouts |
-| `src/app.ts` | `Game`: fixed-step loop, input, event routing, sound/flash cues, reset, mute; `debugControls()` | contain rules |
+| `src/app.ts` | `Game`: fixed-step loop, input (one main button: start, fire, initials), event routing, sound/flash cues, saving scores and the jackpot, reset, mute; `debugControls()` | contain rules |
 | `src/render/stage.ts` | Renderer, camera rig, bloom, environment map, lights, instanced balls and pearls, LED animation, LCD repaint | mutate game state |
 | `src/render/cabinet.ts` | Static cabinet geometry and materials | — |
 | `src/render/textures.ts`, `lcd.ts` | Procedural canvas art (panel, logo, slot windows, signs, disk face, 7-segment display, LCD) | — |
@@ -135,7 +140,7 @@ The cabinet is modeled on reference frames from the videos in `media/`: layout, 
   - The idle and attract music pulses at about 92 BPM in both cabinet clips → a G-major I–vi–IV–V bed.
   - Party Time (1:19, 1:32) pulses at about 199/min with a brighter spectrum → a G-minor bed at 100 BPM: eighth hats, kick, claps, bass, and a square lead.
   - Ticket Party is the lighter major variant.
-- **Cues:** launch whoosh, tray clatter, pearl thump, slot jingles (BALL arpeggio, TICKET bell, LUCKY sparkle), lucky win/miss, pocket payouts scaled by tier, jackpot (brass stabs, siren, bell run), party start/end, credit "ka-ching".
+- **Cues:** launch whoosh, tray clatter, pearl thump, slot jingles (BALL arpeggio, TICKET bell, LUCKY sparkle), lucky win/miss, pocket payouts scaled by tier, jackpot (brass stabs, siren, bell run), party start/end, run start "ka-ching", low-stock beeps, Last Call bell, sudden-death alarm, revive glide, game-over fall.
 - **Ambience:** mains hum, a pusher motor following pusher speed, and a disk rattle while pearls roll.
 - **Budget:** impacts are throttled per kind and capped at 12 concurrent voices; quiet hits are dropped when busy.
 - **Unlock and mute:** nothing is created before the first user gesture (`unlock()`). Muting stops voice creation and silences the master gain.

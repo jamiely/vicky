@@ -69,7 +69,7 @@ export function prepareSmoke(win, projectRoot) {
     const state = () => evaluate(`(() => {
       const g = window.vicky;
       return {
-        credits: g.rules.credits, shots: g.rules.shots, tickets: g.rules.tickets, ladder: { ...g.rules.ladder },
+        phase: g.run.phase, shots: g.rules.shots, tickets: g.rules.tickets, ladder: { ...g.rules.ladder },
         reserve: g.rules.pearlReserve, unlocked: g.sound.unlocked,
         trayPearls: g.physics.bodies.filter((b) => b.kind === 'pearl' && !b.inBoard).length,
         diskPearls: g.disk.pearls.length,
@@ -77,9 +77,10 @@ export function prepareSmoke(win, projectRoot) {
     })()`);
     const initial = await state();
 
-    // Real keyboard: hold Space to launch, release to stop.
+    // Real keyboard: the first Space press starts a free-play run; holding it launches, release to stop.
+    assert.equal(initial.phase, "ready", "cabinet waits on the title card");
     win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Space" });
-    await waitFor(async () => (await state()).credits < initial.credits, "real keyboard launch");
+    await waitFor(async () => (await state()).shots > 0, "real keyboard run start and launch");
     await pause(1500);
     win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Space" });
     await waitFor(async () => (await state()).unlocked, "gesture-unlocked audio");

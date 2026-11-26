@@ -31,6 +31,43 @@ button { font: inherit; }
 .stat strong { font-size: 1.35em; font-variant-numeric: tabular-nums; }
 .stat.jackpot strong { color: var(--gold); }
 .stat.party { align-self: center; color: #120626; background: var(--gold); font-weight: 900; letter-spacing: 0.08em; }
+.stat.balls strong { color: var(--cyan); }
+.stat.balls.low { border-color: #ff7598; animation: low 0.6s ease-in-out infinite alternate; }
+.stat.balls.low strong { color: #ffb3c4; }
+@keyframes low { to { background: rgba(255, 60, 110, 0.32); } }
+.hud-alerts {
+  position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 4.4em); left: 50%; transform: translateX(-50%);
+  width: min(34em, calc(100% - 24px)); display: grid; gap: 0.5em; pointer-events: none;
+}
+.stat.banner, .stat.party { text-align: center; }
+.stat.banner { font-weight: 900; letter-spacing: 0.1em; color: var(--cyan); }
+.stat.banner[data-kind='suddenDeath'] { color: #fff; background: #c8164c; border-color: #ff7598; animation: low 0.35s ease-in-out infinite alternate; }
+.stat.banner[data-kind='lastCall'] { color: #120626; background: var(--gold); }
+
+/* Between-run card: title, result, initials, high scores, how to play. */
+.overlay {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2;
+  width: min(26em, calc(100% - 24px)); padding: 1.6em 1.4em; text-align: center;
+  border: 1px solid var(--border); border-radius: 1em; background: rgba(6, 10, 22, 0.86); backdrop-filter: blur(8px);
+  box-shadow: 0 0 60px rgba(94, 238, 255, 0.18); pointer-events: none;
+}
+.overlay .eyebrow { color: var(--muted); font-size: 0.75em; font-weight: 800; letter-spacing: 0.24em; }
+.overlay h1 { margin: 0.25em 0; font-size: 2.6em; font-weight: 900; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; color: var(--ink); }
+.overlay h1 span { color: var(--pink); }
+.overlay p { margin: 0.4em 0; color: #bcd2e0; line-height: 1.5; }
+.overlay-action { display: inline-block; margin-top: 1em; padding: 0.7em 1.2em; border-radius: 0.5em; color: #07131c; background: var(--cyan); font-weight: 900; letter-spacing: 0.14em; animation: pulse 1.2s ease-in-out infinite alternate; }
+@keyframes pulse { to { filter: brightness(1.35); } }
+.initials { display: flex; justify-content: center; gap: 0.6em; margin: 0.8em 0 0.4em; }
+.initial { position: relative; width: 1.6em; padding-bottom: 0.15em; font-size: 2.6em; font-weight: 900; color: var(--muted); border-bottom: 3px solid #2b4152; }
+.initial.current { color: var(--gold); border-color: var(--gold); }
+.initial.locked { color: var(--cyan); border-color: var(--cyan); }
+.initial i { position: absolute; left: 0; right: 0; bottom: -3px; height: 3px; background: var(--cyan); transform-origin: left; }
+.high-scores, .how { margin: 0.8em auto 0; padding: 0 0 0 1.8em; text-align: left; }
+.high-scores li { padding: 0.22em 0.3em; border-bottom: 1px solid rgba(94, 238, 255, 0.14); font-variant-numeric: tabular-nums; color: var(--muted); }
+.high-scores li span { color: var(--cyan); font-weight: 800; letter-spacing: 0.2em; }
+.high-scores li strong { float: right; color: var(--gold); }
+.high-scores li.empty { list-style: none; text-align: center; letter-spacing: 0.2em; }
+.how li { margin: 0.45em 0; color: #d6e6f0; line-height: 1.4; }
 
 .feed {
   position: absolute; top: 84px; right: 12px; width: min(20em, calc(100% - 24px));
@@ -67,8 +104,8 @@ button { font: inherit; }
  * buttons the bottom one, all scaled with the screen width.
  */
 #app[data-layout='portrait'] { font-size: clamp(13px, 2.6vw, 30px); }
-#app[data-layout='portrait'] .stat { flex: 1 1 calc(25% - 0.5em); min-width: 0; }
-#app[data-layout='portrait'] .stat.party { flex-basis: 100%; text-align: center; }
+#app[data-layout='portrait'] .stat { flex: 1 1 calc(20% - 0.5em); min-width: 0; }
+#app[data-layout='portrait'] .hud-alerts { top: auto; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 3.75em + 9.6em); width: calc(100% - 24px); }
 #app[data-layout='portrait'] .feed { top: auto; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 3.75em); left: 12px; right: 12px; width: auto; }
 #app[data-layout='portrait'] .hud-bottom button { flex: 1; min-width: 0; padding: 0 0.5em; }
 #app[data-layout='portrait'] .feed li:nth-child(n + 4) { display: none; }

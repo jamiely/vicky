@@ -11,7 +11,7 @@ import { chutePoint, groovePoint, liftPoint, releasePoint, sinkDepth, stackPoint
 import type { PhysicsWorld } from '../sim/physics';
 import type { DebugLightInfo, DebugLights } from '../ui/debugMenu';
 import { buildCabinet, JACKPOT_DIGITS, type Cabinet } from './cabinet';
-import { LCD_SIZE, paintLcd, type LcdFlash } from './lcd';
+import { LCD_SIZE, paintLcd, type LcdFlash, type LcdRun } from './lcd';
 import { VIEW, type CameraView, type Layout } from './settings';
 import { paintSevenSegment } from './textures';
 
@@ -127,7 +127,7 @@ export class Stage {
     this.flashState = { kind, amount, age: 0 };
   }
 
-  update(physics: PhysicsWorld, disk: PocketDisk, rules: GameRules, time: number, dt: number): void {
+  update(physics: PhysicsWorld, disk: PocketDisk, rules: GameRules, time: number, dt: number, run: LcdRun | null = null): void {
     this.applyView();
     this.syncBodies(physics, disk, rules);
     this.cabinet.pusher.position.z = physics.pusherFront - PUSHER.depth / 2;
@@ -140,7 +140,7 @@ export class Stage {
     }
     if (time >= this.lcdNext) {
       this.lcdNext = time + 1 / LCD_FPS;
-      paintLcd(this.lcdCtx, rules, time, this.flashState);
+      paintLcd(this.lcdCtx, rules, time, this.flashState, run);
       this.lcdTex.needsUpdate = true;
     }
     if (rules.jackpot !== this.jackpotShown) {

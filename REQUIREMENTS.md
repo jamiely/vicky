@@ -28,18 +28,23 @@ video, real ticket dispensing, and real money.
 
 ## 2. Game loop
 
-1. **Credits → shots.** One credit loads a fixed batch of shots. Each credit adds +1 to the progressive jackpot. [INF], jackpot rise [F]
+1. **Free-play run (bankroll).** [INF: the source is a coin-op; this replaces credits with an end condition] A press starts a run with **80 balls** (cap 99). Each shot spends one; every white ball the pusher shoves off the **front** edge returns one. Every 10 shots grow the progressive jackpot by 1 (jackpot rise [F]).
+   - **Sudden death:** out of balls with the board empty, a 6 s window opens; a ball off the front revives the run.
+   - **Last Call** at 4:00: refills stop; shoot out what's left.
+   - **Final push:** when the run is out of balls (sudden death expired, or after Last Call) the pusher runs 2.5× for at least 4 s, until pearls on the disk have paid (at most 15 s). Then the run is over; its score is the tickets it won.
+   - Measured with the real physics, holding fire: runs last ~3:30–4:55 (6 seeds through `Game`; 8 seeds in a headless probe gave 2:10–4:50, median ~3:50).
+   - Between runs the machine carries over: tray, tower pearls, and the jackpot (also saved across restarts). Score and ladders reset; parties end with the run.
 2. **Launch.** Pressing launch fires one ball into the top of the peg board at a random entry; holding auto-fires at 2 shots/s. There is no aiming: on the source cabinet players cannot steer shots ([T 09:05] "you don't really have much choice"). Measured: an aim control made the left edge (`BALL · TICKET · BALL`) a dominant strategy (66% BALL vs 31% at center).
 3. **Peg board.** The ball falls through physically simulated pegs and lands in one of the 7 slots.
 4. **Slot outcomes:**
-   - `BALL`: drops N white balls onto the tray ([T 02:51] "every time you hit the ball slot it jumps an amount of balls") and advances the **ball ladder**.
+   - `BALL`: drops 2 white balls onto the tray (tuned for the bankroll: at 2 a shot returns ~0.8 balls, at 3 no run went broke) ([T 02:51] "every time you hit the ball slot it jumps an amount of balls") and advances the **ball ladder**.
    - `TICKET`: awards the current ticket-ladder value (8 → 10 → 12 → 15 → 20 → 25 → 30 → 40; contains the run 15·20·25·?·40 seen at [F 10:13]) and advances the **ticket ladder**.
    - `BIG BALL LUCKY`: releases one big pearl from the tower reserve onto the tray, if the tower holds any ([T 04:06] "big ball, we always like the big balls"). [INF: exact center-slot effect]
    - Advancing one ladder knocks the other back two steps ([T 03:45] "we lost some progress cuz we went into a ticket", [T 04:03] "we got a ticket, that means we go backwards", [T 04:15] "continuously two away"). [INF: exact amount]
 5. **Party Time.** Topping a ladder (8 beads) starts that ladder's party for 31 s ([T 01:47] "31 seconds double balls and party time", [T 08:02] "33 seconds"). The ladder then resets. Ladder length and knockback are tuned so Ball Party Time arrives ~15×/hour (~13% of play); the source video shows ~4 in 14 minutes. With 5 beads, a party would be running more than half the time.
    - **Ball Party Time:** `BALL` slot drops double balls; disk pockets pay party values; yellow pays the progressive jackpot ("SUPER"). The jackpot can be won more than once per party ([T 02:03] "double super bonus in one party time").
    - **Ticket Party Time:** `TICKET` slot pays the top ladder value on every hit. [INF: effect; players call it the weaker party, [T 06:49]]
-6. **Pusher tray.** The pusher oscillates continuously. White balls pushed over the **front** edge recycle into the machine with no payout. [INF; refunding shots made credits unnecessary] Pearls over a **side** edge (the rail-free front corners) pay nothing. [T 03:22]
+6. **Pusher tray.** The pusher oscillates continuously. White balls pushed over the **front** edge return to the run's stock (see 1). Pearls over a **side** edge (the rail-free front corners) pay nothing. [T 03:22]
 7. **Pearls and the disk.** A pearl pushed over the front edge is routed to the spinning disk, settles into a colored pocket, and pays by color:
 
    | Pocket | Normal | Ball Party Time | Evidence |
@@ -49,7 +54,8 @@ video, real ticket dispensing, and real money.
    | yellow | 120    | progressive jackpot, reset to base | [T 01:25] "yellow's worth 1200", [T 01:32] "super jackpot", [T 06:03] "still 120" off-party |
 
    Observed values also include 80, 150, 160, 220, 380, 400, and 420 ([T 11:01]–[T 12:30]). The source likely uses a multiplier this spec does not model; keep payouts in config so a multiplier can be added later.
-8. **Pearl circulation.** Pearls are a fixed set that circulates: tray → (front edge) disk pocket → tower lift → tower reserve → LUCKY → tray. Side losses skip the disk. The clear tower beside the tray visibly holds the waiting pearls, and the LCD hub shows "LUCKY BALL" with the count ([F 04:41], [F 10:13], demo 0:20). The machine starts with ~4 pearls on the tray ([T 03:12] "this one's got four pearls already on it") and 4 in the tower. Tray contents carry across credits.
+8. **Pearl circulation.** Pearls are a fixed set that circulates: tray → (front edge) disk pocket → tower lift → tower reserve → LUCKY → tray. Side losses skip the disk. The clear tower beside the tray visibly holds the waiting pearls, and the LCD hub shows "LUCKY BALL" with the count ([F 04:41], [F 10:13], demo 0:20). The machine starts with ~4 pearls on the tray ([T 03:12] "this one's got four pearls already on it") and 4 in the tower. Tray contents carry across runs.
+9. **High scores and attract.** [INF; shared with `../glowfall`] A run that makes the top 10 takes three initials with the one button: tap steps the letter A–Z, holding 0.6 s locks it; 10 s idle locks the rest. The table is saved on the machine (localStorage). Then a 10 s PLAY AGAIN offer: a press starts the next run at 0 (the finished score is already banked). After 30 s idle between runs an attract cycle shows the title, the live machine, the high scores, and how to play; any press starts a run. The C (credit) key does nothing (on the cabinet, holding it exits).
 
 ## 3. Presentation
 
@@ -61,7 +67,7 @@ video, real ticket dispensing, and real money.
   - Effects: bloom and reflections.
 - The LCD mirrors rule state: both ladders, the active party with countdown, current pocket values, the jackpot, the tower count, and celebration flashes.
 - Sound is synthesized: peg clicks, launch, tray clatter, pearl thumps, slot jingles, payouts, jackpot fanfare, idle and party music beds, cabinet ambience. A mute toggle is remembered.
-- The HUD shows credits, shots, tickets won, and the jackpot. Buttons: insert credit, launch (hold to auto-fire), reset, sound.
+- The HUD shows balls, the Last Call clock, score, high score, and the jackpot; banners for sudden death, Last Call, and the final push; a between-run card (title, result and rank, initials, high scores, how to play). Buttons: launch (hold to auto-fire), reset, sound.
 - Debug menu (`?debug=1`): live camera, render, simulation, and rule tunables; cheats; light editor; presets.
 - Input: press anywhere on the cabinet, the LAUNCH button, or Space; holding auto-fires.
 - Targets: 60 fps on a recent laptop with ~300 simulated balls; layout usable at 390 px wide.
@@ -75,7 +81,7 @@ video, real ticket dispensing, and real money.
 
 1. The page loads with no console errors over HTTP and from `file://`.
 2. The tray starts with white balls and 4 pearls; the pusher visibly moves them.
-3. Launching consumes a shot; the ball falls through the pegs and lands in a slot; the slot effect is visible in the HUD/LCD.
+3. A press starts a run of 80 balls; launching spends one, and a white ball off the front returns one until Last Call (4:00); out of balls, sudden death then the final push end the run, and a top-10 score takes initials; the ball falls through the pegs and lands in a slot; the slot effect is visible in the HUD/LCD.
 4. Hitting `BALL` adds balls to the tray; hitting `TICKET` adds ladder tickets; ladders push each other back.
 5. Topping a ladder starts a 31 s party with a visible countdown that ends on time.
 6. A pearl pushed off the front lands in a disk pocket and pays the table value for the current mode; yellow during Ball Party pays and resets the jackpot.

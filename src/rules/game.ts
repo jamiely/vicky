@@ -12,9 +12,10 @@ export interface Notice {
  * answers with `Effect`s the physics layer must perform. Fields are public for read-only use by HUD/LCD.
  */
 export class GameRules {
-  credits: number = RULES.startCredits;
-  shots = 0;
+  /** Tickets won this run: the score. */
   tickets = 0;
+  /** Shots fired this run. */
+  shots = 0;
   jackpot: number = RULES.jackpotBase;
   ladder: Record<Side, number> = { ball: 0, ticket: 0 };
   /** Simulated time at which each party ends; null when inactive. */
@@ -26,22 +27,28 @@ export class GameRules {
   pearlReserve: number = RULES.pearlReserveStart;
   private notices: Notice[] = [];
 
-  addCredits(count: number): void {
-    this.credits += count;
+  /** Counts a launched shot; every `jackpotShots` shots grow the progressive jackpot by one. */
+  onShot(): void {
+    this.shots++;
+    if (this.shots % RULES.jackpotShots === 0) this.jackpot++;
     this.version++;
   }
 
-  /** Consumes one shot, converting a credit into a batch when the shot bank is empty. */
-  tryLaunch(): boolean {
-    if (this.shots === 0) {
-      if (this.credits === 0) return false;
-      this.credits--;
-      this.shots += RULES.shotsPerCredit;
-      this.jackpot += RULES.jackpotPerCredit;
-    }
-    this.shots--;
+  /**
+   * Starts a new run's scoring. The machine carries over, as on a real cabinet: the jackpot and the tower's pearls;
+   * the score, ladders, and parties start fresh.
+   */
+  newRun(): void {
+    this.tickets = 0;
+    this.shots = 0;
+    this.ladder = { ball: 0, ticket: 0 };
+    this.endParties();
+  }
+
+  /** Ends any running party silently (a run ended; nobody is playing it). */
+  endParties(): void {
+    this.partyEnds = { ball: null, ticket: null };
     this.version++;
-    return true;
   }
 
   tick(now: number): void {

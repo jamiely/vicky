@@ -272,13 +272,43 @@ export class SoundEngine {
     notes.forEach((n, i) => this.tone(t + i * 0.15, hz(n), 0.3, 'triangle', 0.1, this.sfx, 0, true));
   }
 
+  /** Run start: coin "ka-ching". */
   credit(): void {
     const t = this.now();
     if (t === null) return;
-    // Coin "ka-ching".
     this.tone(t, 1318.5, 0.07, 'square', 0.07, this.sfx);
     this.tone(t + 0.07, 2637, 0.35, 'square', 0.06, this.sfx, 0, true);
     this.noiseHit(t + 0.07, 0.2, 'highpass', 6000, 1, 0.05, this.sfx);
+  }
+
+  /** Run cues: low-stock warning, Last Call bell, sudden-death alarm, revive, and the game-over fall. */
+  run(cue: 'lowStock' | 'lastCall' | 'suddenDeath' | 'revive' | 'over'): void {
+    const t = this.now();
+    if (t === null) return;
+    switch (cue) {
+      case 'lowStock':
+        for (let i = 0; i < 2; i++) this.tone(t + i * 0.18, hz(81), 0.12, 'square', 0.07, this.sfx);
+        break;
+      case 'lastCall':
+        // Last-orders bell: three strikes, each with an inharmonic partial.
+        for (let i = 0; i < 3; i++) {
+          this.tone(t + i * 0.32, hz(84), 0.9, 'sine', 0.16, this.sfx, 0, true);
+          this.tone(t + i * 0.32, hz(84) * 2.76, 0.4, 'sine', 0.04, this.sfx, 0, true);
+        }
+        this.duckMusic(t, 1.4);
+        break;
+      case 'suddenDeath':
+        for (let i = 0; i < 4; i++) this.tone(t + i * 0.25, hz(i % 2 ? 72 : 76), 0.2, 'sawtooth', 0.06, this.sfx);
+        this.duckMusic(t, 1.1);
+        break;
+      case 'revive':
+        this.glide(t, 400, 1400, 0.3, 'square', 0.06);
+        break;
+      case 'over':
+        [67, 64, 60, 55].forEach((n, i) => this.tone(t + i * 0.22, hz(n), i === 3 ? 0.9 : 0.24, 'triangle', 0.13, this.sfx, 0, true));
+        this.duckMusic(t, 1.6);
+        break;
+    }
   }
 
   update(state: { pusherPhase: number; ballParty: boolean; ticketParty: boolean; diskPearls: number }): void {

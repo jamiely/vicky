@@ -83,7 +83,14 @@ function text(ctx: CanvasRenderingContext2D, value: string, x: number, y: number
 }
 
 /** Paints one frame. `time` is monotonic seconds for animation; `flash` drives celebration overlays. */
-export function paintLcd(ctx: CanvasRenderingContext2D, rules: GameRules, time: number, flash: LcdFlash | null): void {
+/** The run's stock and clock for the LCD's top-left corner. */
+export interface LcdRun {
+  stock: number;
+  /** Seconds to Last Call; null once called (or between runs). */
+  clock: number | null;
+}
+
+export function paintLcd(ctx: CanvasRenderingContext2D, rules: GameRules, time: number, flash: LcdFlash | null, run: LcdRun | null = null): void {
   const ballParty = rules.partyEnds.ball !== null;
   const ticketParty = rules.partyEnds.ticket !== null;
   const party = ballParty || ticketParty;
@@ -187,12 +194,17 @@ export function paintLcd(ctx: CanvasRenderingContext2D, rules: GameRules, time: 
   text(ctx, 'BALL PARTY', CX - LADDER_R, 36, 28, '#ff8ae0');
   text(ctx, 'TICKET PARTY', CX + LADDER_R, 36, 28, '#8ad8ff');
 
-  // Corners: jackpot top-right, credits/shots top-left, tickets bottom-right.
+  // Corners: jackpot top-right, the run's balls and clock top-left, score bottom-right.
   text(ctx, 'SUPERBONUS', LCD_SIZE.w - 30, 34, 26, '#ffd34d', 'right');
   text(ctx, String(rules.jackpot), LCD_SIZE.w - 30, 82, 58, '#fff2a0', 'right');
-  text(ctx, `CREDITS ${rules.credits}`, 30, 34, 26, '#bfefff', 'left');
-  text(ctx, `SHOTS ${rules.shots}`, 30, 70, 26, '#bfefff', 'left');
-  text(ctx, `TICKETS ${rules.tickets}`, LCD_SIZE.w - 30, LCD_SIZE.h - 32, 28, '#ffffff', 'right');
+  if (run) {
+    text(ctx, `BALLS ${run.stock}`, 30, 34, 26, run.stock <= 10 ? '#ff9ab4' : '#bfefff', 'left');
+    const s = run.clock === null ? 0 : Math.ceil(run.clock);
+    text(ctx, run.clock === null ? 'LAST CALL' : `LAST CALL ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, 30, 70, 26, run.clock === null ? '#ffd34d' : '#bfefff', 'left');
+  } else {
+    text(ctx, 'FREE PLAY', 30, 34, 26, '#bfefff', 'left');
+  }
+  text(ctx, `SCORE ${rules.tickets}`, LCD_SIZE.w - 30, LCD_SIZE.h - 32, 28, '#ffffff', 'right');
 
   // Party banners with countdown.
   const banners: [string, number | null, string][] = [
